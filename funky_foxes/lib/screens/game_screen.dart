@@ -1019,10 +1019,8 @@ class _GameScreenState extends State<GameScreen> {
     // 3) Construire le widget de l'image si on a quelque chose
     Widget? questionImageWidget;
     if (imageName != null && imageName.isNotEmpty) {
-      final catSlug = (category ?? '').replaceAll(' ', '_');
-      // Important: n’oubliez pas de préciser "assets/" si vous avez déclaré
-      // “assets/images/quiz/” dans votre pubspec.yaml
-      final assetPath = 'images/Quiz/$catSlug/$imageName';
+
+      final assetPath = 'assets/images/$imageName';
       print('DEBUG: Image path = $assetPath');
 
       questionImageWidget = Padding(
