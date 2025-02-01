@@ -13,7 +13,7 @@ class GameService {
   GameService() {
     socket = IO.io(
       // 'http://192.168.0.53:3000', // wifi
-      'http://192.168.155.236:3000', // 5G
+      'http://192.168.1.168:3000', // 5G
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()

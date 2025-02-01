@@ -58,6 +58,9 @@ class _GameScreenState extends State<GameScreen> {
   bool _isQuizInProgress = false;
   int? _currentQuestionIndex;
   String? _currentQuestionDescription;
+  String? _currentQuestionCategory;
+  String? _currentQuestionImage;
+
   List<dynamic> _currentQuestionOptions = [];
   bool? _wasAnswerCorrect;
   String? _correctAnswer;
@@ -195,6 +198,8 @@ class _GameScreenState extends State<GameScreen> {
         _wasAnswerCorrect = null;
         _correctAnswer = null;
         _lastGivenAnswer = null;
+        _currentQuestionCategory = null;
+        _currentQuestionImage = null;
       });
     });
 
@@ -205,6 +210,8 @@ class _GameScreenState extends State<GameScreen> {
         _currentQuestionOptions = data['questionOptions'];
         _wasAnswerCorrect = null;
         _correctAnswer = null;
+        _currentQuestionCategory = data['questionCategory'];
+        _currentQuestionImage = data['questionImage'];
       });
     });
 
@@ -619,7 +626,7 @@ class _GameScreenState extends State<GameScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                "IT'S YOUR TURN ! Please continue in the forest.",
+                "It's your turn ! Please continue in the forest.",
                 style: AppTheme.themeData.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
@@ -641,20 +648,23 @@ class _GameScreenState extends State<GameScreen> {
           ],
         );
       case 'betting':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Other players are making their predictions...',
-              style: AppTheme.themeData.textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-          ],
+        return Container(
+          margin: EdgeInsets.only(top: screenHeight * 0.25, left: screenHeight * 0.10, right: screenHeight * 0.10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Other players are making their predictions...',
+                style: AppTheme.themeData.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         );
       case 'challengeInProgress':
         return Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: EdgeInsets.only(top: screenHeight * 0.25, left: 12.0, right: 12.0, bottom: 12.0),
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -670,21 +680,24 @@ class _GameScreenState extends State<GameScreen> {
           ),
         );
       case 'result':
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Challenge results : ${majorityVote ?? "No result"}',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              AppTheme.customButton(
-                label: "End the turn",
-                onPressed: () => _gameService.endTurn(widget.gameId),
-              ),
-            ],
+        return Container(
+          margin: EdgeInsets.only(top: screenHeight * 0.25),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Challenge results : ${majorityVote ?? "No result"}',
+                  style: AppTheme.themeData.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                AppTheme.customButton(
+                  label: "End the turn",
+                  onPressed: () => _gameService.endTurn(widget.gameId),
+                ),
+              ],
+            ),
           ),
         );
       default:
@@ -709,31 +722,33 @@ class _GameScreenState extends State<GameScreen> {
       case 'cardDrawn':
         return Center(child: buildCardDisplay());
       case 'betting':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            buildCardDisplay(),
-            const SizedBox(height: 16),
-            Text(
-              'Make your predictions:',
-              style: AppTheme.themeData.textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ...betOptions.map((option) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                child: AppTheme.customButton(
-                  label: option,
-                  onPressed: () => _gameService.placeBet(widget.gameId, widget.playerId, option),
-                ),
-              );
-            }).toList(),
-          ],
+        return Container(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              buildCardDisplay(),
+              const SizedBox(height: 16),
+              Text(
+                'Make your predictions:',
+                style: AppTheme.themeData.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ...betOptions.map((option) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: AppTheme.customButton(
+                    label: option,
+                    onPressed: () => _gameService.placeBet(widget.gameId, widget.playerId, option),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
         );
       case 'challengeInProgress':
         return Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: EdgeInsets.only(top: screenHeight * 0.25, left: 12.0, right: 12.0, bottom: 12.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -763,17 +778,21 @@ class _GameScreenState extends State<GameScreen> {
           ),
         );
       case 'result':
-        return Center(
-          child: Text(
-            'Challenge results : ${majorityVote ?? "No result"}',
-            style: AppTheme.themeData.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
+        return Container(
+          margin: EdgeInsets.only(top: screenHeight * 0.25),
+          child: Center(
+            child: Text(
+              'Challenge results : ${majorityVote ?? "No result"}',
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
           ),
         );
       default:
         return Container();
     }
   }
+
 
   // ------------------------------------------------------
   // QUIZ
@@ -790,7 +809,7 @@ class _GameScreenState extends State<GameScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                "IT'S YOUR TURN ! Please continue in the forest.",
+                "It's your turn ! Please continue in the forest.",
                 style: AppTheme.themeData.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
@@ -977,7 +996,13 @@ class _GameScreenState extends State<GameScreen> {
   // ------------------------------------------------------
   // BUILD: QUIZ QUESTION
   // ------------------------------------------------------
+
+  
   Widget buildQuizQuestionView({bool isActive = true}) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // 1) Si pas encore de questionIndex => "loading"
     if (_currentQuestionIndex == null) {
       return Center(
         child: Text(
@@ -986,26 +1011,69 @@ class _GameScreenState extends State<GameScreen> {
         ),
       );
     }
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "Question ${_currentQuestionIndex! + 1}",
-          style: AppTheme.themeData.textTheme.bodyMedium,
+
+    // 2) Récupération de la catégorie et de l'image
+    final String? category = _currentQuestionCategory;
+    final String? imageName = _currentQuestionImage;
+
+    // 3) Construire le widget de l'image si on a quelque chose
+    Widget? questionImageWidget;
+    if (imageName != null && imageName.isNotEmpty) {
+      final catSlug = (category ?? '').replaceAll(' ', '_');
+      // Important: n’oubliez pas de préciser "assets/" si vous avez déclaré
+      // “assets/images/quiz/” dans votre pubspec.yaml
+      final assetPath = 'images/Quiz/$catSlug/$imageName';
+      print('DEBUG: Image path = $assetPath');
+
+      questionImageWidget = Padding(
+        padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.contain,
+          height: screenHeight * 0.22, // Ajustez la taille (responsif)
         ),
-        const SizedBox(height: 10),
-        if (_currentQuestionDescription != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              _currentQuestionDescription!,
+      );
+    }
+
+    // 4) Retour : centrer tout, ajouter un peu de marge en haut
+    return Center(
+      child: Container(
+        // Une marge en haut pour descendre un peu si besoin
+        margin: EdgeInsets.only(top: screenHeight * 0.03),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // pour ne pas prendre tout l'espace vertical
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Numéro de la question
+            Text(
+              "Question ${_currentQuestionIndex! + 1}",
               style: AppTheme.themeData.textTheme.bodyMedium,
-              textAlign: TextAlign.center,
             ),
-          ),
-        const SizedBox(height: 20),
-        for (var option in _currentQuestionOptions) _buildAnswerButton(option, isActive),
-      ],
+            SizedBox(height: screenHeight * 0.01),
+
+            // En-tête de la question
+            if (_currentQuestionDescription != null)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
+                child: Text(
+                  _currentQuestionDescription!,
+                  style: AppTheme.themeData.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+            // Affichage conditionnel de l'image
+            if (questionImageWidget != null) questionImageWidget,
+
+            SizedBox(height: screenHeight * 0.02),
+
+            // Les options de réponse
+            for (var option in _currentQuestionOptions)
+              _buildAnswerButton(option, isActive),
+          ],
+        ),
+      ),
     );
   }
 

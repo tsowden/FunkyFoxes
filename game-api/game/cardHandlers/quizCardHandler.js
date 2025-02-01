@@ -87,8 +87,11 @@ class QuizCardHandler extends GenericCardHandler {
         questionIndex: quizState.currentQuestion,
         questionId: question.question_id,
         questionDescription: question.question_description,
+        questionImage: question.question_image,
         questionOptions: JSON.parse(question.question_options), 
         questionDifficulty: question.question_difficulty,
+        questionImage: question.question_image,       // <--- à ne pas oublier
+        questionCategory: question.question_category, // <--- idem si nécessaire
       });
 
       console.log(`QuizCardHandler: Sending question #${quizState.currentQuestion + 1} in theme "${quizState.chosenTheme}"`);

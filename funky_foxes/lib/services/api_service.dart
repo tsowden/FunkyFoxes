@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // static const String baseUrl = 'http://192.168.0.53:3000'; // Wifi
-  static const String baseUrl = 'http://192.168.155.236:3000'; // 5G
+  static const String baseUrl = 'http://192.168.1.168:3000'; // 5G
 
   Future<Map<String, String>?> createGame(String playerName) async {
     print('ApiService.createGame($playerName) -> POST $baseUrl/api/game/create-game');
