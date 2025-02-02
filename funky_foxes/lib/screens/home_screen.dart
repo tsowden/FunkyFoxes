@@ -5,6 +5,8 @@ import 'package:funky_foxes/services/game_service.dart';
 import '../services/api_service.dart';
 import '../styles/app_theme.dart';
 import 'lobby_screen.dart';
+import 'package:funky_foxes/screens/profil_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -31,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (result != null) {
           print('HomeScreen: createGame OK -> gameId=${result['gameId']}, playerId=${result['playerId']}');
-          final gameService = GameService();   // (LIGNE AJOUTÉE)
+          final gameService = GameService();
 
           Navigator.push(
             context,
@@ -115,44 +117,49 @@ class _HomeScreenState extends State<HomeScreen> {
     return await showDialog<String>(
       context: context,
       builder: (context) {
-        return Theme(
-          data: AppTheme.themeData,
-          child: AlertDialog(
-            title: Text(
-              title,
-              style: AppTheme.themeData.textTheme.bodyLarge,
-            ),
-            content: TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: AppTheme.themeData.textTheme.bodySmall,
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(viewInsets: EdgeInsets.zero),
+          child: Theme(
+            data: AppTheme.themeData,
+            child: AlertDialog(
+              title: Text(
+                title,
+                style: AppTheme.themeData.textTheme.bodyLarge,
               ),
-              style: AppTheme.themeData.textTheme.bodySmall,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  'Cancel',
-                  style: AppTheme.themeData.textTheme.bodyMedium,
+              content: TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: hint,
+                  hintStyle: AppTheme.themeData.textTheme.bodySmall,
                 ),
+                style: AppTheme.themeData.textTheme.bodySmall,
               ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context, controller.text.trim());
-                },
-                child: Text(
-                  'Confirm',
-                  style: AppTheme.themeData.textTheme.bodyMedium,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: AppTheme.themeData.textTheme.bodyMedium,
+                  ),
                 ),
-              ),
-            ],
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context, controller.text.trim());
+                  },
+                  child: Text(
+                    'Confirm',
+                    style: AppTheme.themeData.textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
+
 
   void _showErrorDialog(String message) {
     showDialog(
@@ -188,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // Fond commun
@@ -223,23 +231,50 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: screenHeight * 0.15,
             left: screenWidth * 0.1,
             right: screenWidth * 0.1,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AppTheme.customButton(
-                  label: 'Create a game',
-                  onPressed: _createGame,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280), // largeur maximale fixée
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: AppTheme.customButton(
+                        label: 'Mon profil',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProfilScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(height: screenHeight * 0.01),
+                    SizedBox(
+                      width: double.infinity,
+                      child: AppTheme.customButton(
+                        label: 'Créer une partie',
+                        onPressed: _createGame,
+                      ),
+                    ),
+                    SizedBox(height: screenHeight * 0.01),
+                    SizedBox(
+                      width: double.infinity,
+                      child: AppTheme.customButton(
+                        label: 'Rejoindre une partie',
+                        onPressed: _joinGame,
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(height: screenHeight * 0.03),
-                AppTheme.customButton(
-                  label: 'Join a game',
-                  onPressed: _joinGame,
-                ),
-              ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
 }

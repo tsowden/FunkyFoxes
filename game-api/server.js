@@ -7,6 +7,7 @@ const cors = require('cors');
 const redisClient = require('./config/redis');
 const handleSocketEvents = require('./sockets/socketHandlers');
 const gameRoutes = require('./routes/gameRoutes');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -34,6 +35,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/game', gameRoutes);
+app.use('/api/auth', authRoutes);
 
 io.on('connection', (socket) => {
   console.log('Backend: Un joueur s\'est connecté');
