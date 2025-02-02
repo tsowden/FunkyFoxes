@@ -127,7 +127,7 @@ class AppTheme {
         fontFamily: 'Nunito-Bold',
       ),
       contentTextStyle: const TextStyle(
-        fontSize: 13,
+        fontSize: 15,
         color: greenButton,
         fontFamily: 'Nunito',
       ),

@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../styles/app_theme.dart';
 import 'lobby_screen.dart';
 import 'package:funky_foxes/screens/profil_screen.dart';
+import 'package:funky_foxes/services/auth_service.dart'; 
 
 
 class HomeScreen extends StatefulWidget {
@@ -15,96 +16,147 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
+  final AuthService _authService = AuthService();
+
+  Future<Map<String, dynamic>?> _getLoggedUserProfile() async {
+    final loggedIn = await _authService.isLoggedIn();
+    if (!loggedIn) return null;
+    return await _authService.getProfile(); 
+  }
+
+  // ----------------------------------------------------------
+  // CREER UNE PARTIE
+  // ----------------------------------------------------------
 
   Future<void> _createGame() async {
-    print('HomeScreen: Bouton "Create a game" cliqué');
+    print('HomeScreen: Bouton "Créer une partie" cliqué');
 
-    final playerName = await _showInputDialog(
-      title: 'Create a game',
-      hint: 'Enter your name (max 10 letters)',
-    );
+    // 1) Vérifier si on a un compte
+    final userProfile = await _getLoggedUserProfile();
 
-    print('HomeScreen: playerName saisi pour "Create game" = $playerName');
+    // On déclare en tant que String "non-null", initialisé à vide
+    String finalPseudo = '';
+    String avatarB64 = '';
 
-    if (playerName != null && _validatePlayerName(playerName)) {
-      try {
-        print('HomeScreen: Appel API createGame(playerName=$playerName)');
-        final result = await _apiService.createGame(playerName);
+    if (userProfile != null) {
+      // => On récupère le pseudo et l'avatar depuis le profil
+      finalPseudo = userProfile['pseudo'] ?? '';
+      avatarB64 = userProfile['avatarBase64'] ?? '';
+      print('HomeScreen: Utilisateur connecté, pseudo="$finalPseudo"');
+    } else {
+      // => Utilisateur pas connecté => on demande le pseudo
+      final pseudoEntered = await _showInputDialog(
+        title: 'Créer une partie',
+        hint: 'Entrez votre pseudo (max 10 lettres)',
+      );
+      // Si l’utilisateur annule ou saisit rien => on quitte
+      if (pseudoEntered == null || pseudoEntered.isEmpty) return;
 
-        if (result != null) {
-          print('HomeScreen: createGame OK -> gameId=${result['gameId']}, playerId=${result['playerId']}');
-          final gameService = GameService();
+      // On valide le pseudo
+      if (!_validatePlayerName(pseudoEntered)) return;
 
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => LobbyScreen(
-                gameId: result['gameId']!,
-                playerId: result['playerId']!,
-                playerName: playerName,
-                isHost: true,
-                gameService: gameService,
-              ),
+      finalPseudo = pseudoEntered;
+      avatarB64 = '';
+    }
+
+    // 2) Appel API (finalPseudo est forcément non-null et non vide ici)
+    try {
+      print('HomeScreen: Appel API createGame(playerName=$finalPseudo)');
+      final result = await _apiService.createGame(finalPseudo);
+
+      if (result != null) {
+        print('HomeScreen: createGame OK -> gameId=${result['gameId']}, playerId=${result['playerId']}');
+
+        final gameService = GameService();
+
+        // 3) Navigation vers Lobby
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LobbyScreen(
+              gameId: result['gameId']!,
+              playerId: result['playerId']!,
+              playerName: finalPseudo,       // <- maintenant c’est un String
+              isHost: true,
+              gameService: gameService,
+              avatarBase64: avatarB64,       // <- pareil, c’est un String
             ),
-          );
-        } else {
-          print('HomeScreen: createGame renvoie null, erreur ?');
-          _showErrorDialog('Erreur lors de la création de la partie.');
-        }
-      } catch (e) {
-        print('HomeScreen: Exception lors de la création de la partie : $e');
+          ),
+        );
+      } else {
+        print('HomeScreen: createGame renvoie null, erreur ?');
         _showErrorDialog('Erreur lors de la création de la partie.');
       }
+    } catch (e) {
+      print('HomeScreen: Exception lors de la création de la partie : $e');
+      _showErrorDialog('Erreur lors de la création de la partie.');
     }
   }
 
+  // ----------------------------------------------------------
+  // REJOINDRE UNE PARTIE
+  // ----------------------------------------------------------
   Future<void> _joinGame() async {
-    print('HomeScreen: Bouton "Join a game" cliqué');
+    print('HomeScreen: Bouton "Rejoindre une partie" cliqué');
 
+    // On demande le gameId d’abord
     final gameId = await _showInputDialog(
-      title: 'Join a game',
-      hint: 'Enter the game code',
+      title: 'Rejoindre une partie',
+      hint: 'Entrez le code de la partie',
     );
+    if (gameId == null || gameId.isEmpty) return;
 
-    print('HomeScreen: gameId saisi pour "Join game" = $gameId');
+    // On vérifie si utilisateur logué
+    final userProfile = await _getLoggedUserProfile();
 
-    if (gameId != null && gameId.isNotEmpty) {
-      final playerName = await _showInputDialog(
-        title: 'Name',
-        hint: 'Enter your name (max 10 letters)',
+    String finalPseudo = '';
+    String avatarB64 = '';
+
+    if (userProfile != null) {
+      finalPseudo = userProfile['pseudo'] ?? '';
+      avatarB64 = userProfile['avatarBase64'] ?? '';
+      print('HomeScreen: Utilisateur connecté, pseudo="$finalPseudo"');
+    } else {
+      final pseudoEntered = await _showInputDialog(
+        title: 'Pseudo',
+        hint: 'Entrez votre pseudo (max 10 lettres)',
       );
+      if (pseudoEntered == null || pseudoEntered.isEmpty) return;
 
-      print('HomeScreen: playerName saisi pour "Join game" = $playerName');
+      if (!_validatePlayerName(pseudoEntered)) return;
 
-      if (playerName != null && _validatePlayerName(playerName)) {
-        try {
-          print('HomeScreen: Appel API joinGame(gameId=$gameId, playerName=$playerName)');
-          final result = await _apiService.joinGame(gameId, playerName);
-          final gameService = GameService();   // (LIGNE AJOUTÉE)
-          
-          if (result != null) {
-            print('HomeScreen: joinGame OK -> playerId=${result['playerId']}');
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => LobbyScreen(
-                  gameId: gameId,
-                  playerId: result['playerId']!,
-                  playerName: playerName,
-                  isHost: false,
-                  gameService: gameService
-                ),
-              ),
-            );
-          } else {
-            print('HomeScreen: joinGame renvoie null, erreur ?');
-            _showErrorDialog('Erreur lors de la connexion à la partie.');
-          }
-        } catch (e) {
-          print('HomeScreen: Exception lors de la connexion à la partie : $e');
-          _showErrorDialog('Erreur lors de la connexion à la partie.');
-        }
+      finalPseudo = pseudoEntered;
+      avatarB64 = '';
+    }
+
+    // On appelle l’API
+    try {
+      print('HomeScreen: Appel API joinGame(gameId=$gameId, playerName=$finalPseudo)');
+      final result = await _apiService.joinGame(gameId, finalPseudo);
+      if (result != null) {
+        print('HomeScreen: joinGame OK -> playerId=${result['playerId']}');
+        final gameService = GameService();
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LobbyScreen(
+              gameId: gameId,
+              playerId: result['playerId']!,
+              playerName: finalPseudo,
+              isHost: false,
+              gameService: gameService,
+              avatarBase64: avatarB64,
+            ),
+          ),
+        );
+      } else {
+        print('HomeScreen: joinGame renvoie null, erreur ?');
+        _showErrorDialog('Erreur lors de la connexion à la partie.');
       }
+    } catch (e) {
+      print('HomeScreen: Exception lors de la connexion à la partie : $e');
+      _showErrorDialog('Erreur lors de la connexion à la partie.');
     }
   }
 

@@ -62,7 +62,7 @@ const handleSocketEvents = (io, socket) => {
       const players = JSON.parse(gameData.players || '[]');
       const activePlayerId = gameData.activePlayerId;
 
-      console.log("Backend: broadcastGameInfos -> players =", players);
+      // console.log("Backend: broadcastGameInfos -> players =", players);
 
       const sorted = [...players].sort((a, b) => (b.berries || 0) - (a.berries || 0));
 
@@ -72,6 +72,7 @@ const handleSocketEvents = (io, socket) => {
           playerName: p.playerName,
           berries: p.berries || 0,
           rank: index + 1,
+          avatarBase64: p.avatarBase64 || '',
         };
       });
 
@@ -142,30 +143,35 @@ const handleSocketEvents = (io, socket) => {
   });
 
   socket.on('updateAvatar', async ({ gameId, playerId, avatarBase64 }) => {
-    console.log(`Backend: updateAvatar event for playerId=${playerId}, len(avatarBase64)=${avatarBase64?.length}`);
-  
+    console.log(`Backend: updateAvatar event for player=${playerName}, len(avatarBase64)=${avatarBase64?.length}`);
+    
     try {
       const gameData = await redisClient.hGetAll(`game:${gameId}`);
       if (!gameData) {
         console.error(`Backend: Game not found for id=${gameId}`);
         return;
       }
-  
+      
       const players = JSON.parse(gameData.players || '[]');
       const player = players.find(p => p.playerId === playerId);
-  
+    
       if (!player) {
         console.error(`Backend: Player with ID ${playerId} not found in game ${gameId}`);
         return;
       }
-  
+    
+      // Mise à jour
       player.avatarBase64 = avatarBase64;
       console.log(`Backend: Storing avatarBase64 for ${player.playerName} in game ${gameId}`);
-  
+    
       await redisClient.hSet(`game:${gameId}`, 'players', JSON.stringify(players));
+    
+      // 1) On renvoie currentPlayers pour que le lobby reçoive la liste actualisée
+      io.to(gameId).emit('currentPlayers', players);
   
+      // 2) Optionnel: broadcastGameInfos pour le in-game
       await broadcastGameInfos(gameId);
-  
+    
     } catch (err) {
       console.error('Backend: updateAvatar error:', err);
     }

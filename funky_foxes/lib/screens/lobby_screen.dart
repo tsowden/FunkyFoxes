@@ -1,31 +1,31 @@
 // lib/screens/lobby_screen.dart
 
 import 'dart:io';
+import 'dart:convert'; // pour base64Encode, base64Decode
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../services/game_service.dart';
 import '../styles/app_theme.dart';
-import 'dart:convert'; // pour base64Encode, base64Decode
-
 import 'tutorial_screen.dart';
 import 'game_screen.dart';
 
 class LobbyScreen extends StatefulWidget {
-  final GameService gameService;      // (LIGNE AJOUTÉE)
+  final GameService gameService; // Injection du GameService
   final String gameId;
   final String playerName;
   final bool isHost;
-  final String avatarBase64;
-  final String playerId; // on l’a déjà
+  final String avatarBase64; // Avatar déjà existant (compte connecté) ou vide
+  final String playerId;
 
   const LobbyScreen({
     Key? key,
-    required this.gameService,        // (LIGNE AJOUTÉE)
+    required this.gameService,
     required this.gameId,
     required this.playerId,
     required this.playerName,
     this.isHost = false,
-    this.avatarBase64 = '', // Nullable
+    this.avatarBase64 = '', 
   }) : super(key: key);
 
   @override
@@ -33,11 +33,10 @@ class LobbyScreen extends StatefulWidget {
 }
 
 class _LobbyScreenState extends State<LobbyScreen> {
-
   late final GameService _gameService;
   final ImagePicker _imagePicker = ImagePicker();
 
-  // On stocke tout via playerId
+  // Données joueurs
   List<String> _playerIds = [];
   Map<String, String> _playerNames = {};
   Map<String, bool> _readyStatus = {};
@@ -49,51 +48,52 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    _gameService = widget.gameService;  // (LIGNE AJOUTÉE)
+    _gameService = widget.gameService;
 
-    print('LobbyScreen: Init pour gameId=${widget.gameId} avec playerName=${widget.playerName}, playerId=${widget.playerId}');
+    print('LobbyScreen: Init pour gameId=${widget.gameId} '
+        'avec playerName=${widget.playerName}, playerId=${widget.playerId}');
 
-    // Connexion au jeu via Socket.IO
+    // Connexion Socket.IO
     _gameService.connectToGame(widget.gameId);
     _setupSocketListeners();
-
-    // Rejoindre la room
     _gameService.joinRoom(widget.gameId);
+
+    // Si on a déjà un avatarBase64, on le stocke et on l’envoie au serveur
+    if (widget.avatarBase64.isNotEmpty) {
+      _avatars[widget.playerId] = widget.avatarBase64;
+      _gameService.updateAvatar(widget.gameId, widget.playerId, widget.avatarBase64);
+    }
   }
 
   void _setupSocketListeners() {
-    // currentPlayers
+    // Liste complète de joueurs déjà présents
     _gameService.socket.on('currentPlayers', (data) {
       print('LobbyScreen: currentPlayers => $data');
       setState(() {
-        // on vide nos structures
+        // On réinitialise
         _playerIds.clear();
         _playerNames.clear();
         _readyStatus.clear();
         _avatars.clear();
         readyCount = 0;
 
-        // data est un tableau de joueurs
+        // data est un tableau d’objets (un par joueur)
         for (var p in data) {
           final pid = p['playerId'] as String;
           final pname = p['playerName'] as String;
           final isReady = p['ready'] as bool? ?? false;
           final avatarB64 = p['avatarBase64'] as String? ?? '';
 
-          // On garde l'ordre d'arrivée:
           _playerIds.add(pid);
-
-          // On stocke
           _playerNames[pid] = pname;
           _readyStatus[pid] = isReady;
           _avatars[pid] = avatarB64;
-
           if (isReady) readyCount++;
         }
       });
     });
 
-    // playerJoined
+    // Nouvel arrivant
     _gameService.socket.on('playerJoined', (data) {
       print('LobbyScreen: playerJoined => $data');
       setState(() {
@@ -106,11 +106,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
       });
     });
 
+    // MàJ ready status
     _gameService.socket.on('readyStatusUpdate', (data) {
       final pName = data['playerName'];
       final isReady = data['isReady'] as bool;
 
-      // On cherche le pid correspondant à ce pName
+      // Retrouver le playerId correspondant
       final pid = _playerIds.firstWhere(
         (candidatePid) => _playerNames[candidatePid] == pName,
         orElse: () => '',
@@ -127,17 +128,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
       });
     });
 
-
-    // allPlayersReady
+    // Tous prêts
     _gameService.socket.on('allPlayersReady', (_) {
       print('LobbyScreen: allPlayersReady => tous prêts !');
       if (widget.isHost) _showStartGameDialog();
     });
 
-    // startGame
+    // Démarrage de la partie (-> tutorial)
     _gameService.socket.on('startGame', (data) {
       print('LobbyScreen: startGame => data=$data');
-      // Naviguer vers Tutorial
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -154,11 +153,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   @override
   void dispose() {
-    // NOTE: on ne déconnecte pas le socket pour le moment,
-    // car le GameService peut être utilisé plus tard
+    // On ne déconnecte pas ici le socket si on poursuit la partie
     super.dispose();
   }
 
+  // ---------------------------------------------------
+  // PHOTO
+  // ---------------------------------------------------
   Future<void> _takePhoto() async {
     final XFile? picked = await _imagePicker.pickImage(source: ImageSource.camera);
     if (picked == null) return;
@@ -167,12 +168,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final base64Str = base64Encode(bytes);
     print("LobbyScreen: Photo prise => base64 length=${base64Str.length}");
 
+    // Envoyer au serveur
     if (widget.playerId.isNotEmpty) {
       print("DEBUG: Emitting updateAvatar with playerId=${widget.playerId}");
       _gameService.updateAvatar(widget.gameId, widget.playerId, base64Str);
-
       setState(() {
-        // Mémoriser localement (si on veut afficher un avatar local)
         _avatars[widget.playerId] = base64Str;
       });
     }
@@ -182,31 +182,35 @@ class _LobbyScreenState extends State<LobbyScreen> {
     });
   }
 
+  // ---------------------------------------------------
+  // TOGGLE READY
+  // ---------------------------------------------------
   void _toggleReadyStatus(bool isReady) {
     print('LobbyScreen: setReadyStatus($isReady) for playerId=${widget.playerId} => name=${widget.playerName}');
     _gameService.setReadyStatus(widget.gameId, widget.playerName, isReady);
 
     setState(() {
-      // local
       _readyStatus[widget.playerId] = isReady;
       readyCount = _readyStatus.values.where((r) => r == true).length;
     });
-}
+  }
 
-
+  // ---------------------------------------------------
+  // START GAME (HOST)
+  // ---------------------------------------------------
   void _showStartGameDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("All players are ready!"),
-        content: Text("Do you want to start the game now?"),
+        title: const Text("Tous les joueurs sont prêts !"),
+        content: const Text("Souhaitez-vous lancer la partie ?"),
         actions: [
           TextButton(
             onPressed: () {
               print('LobbyScreen: L’hôte annule le startGame');
               Navigator.pop(ctx);
             },
-            child: Text("No"),
+            child: const Text("No"),
           ),
           TextButton(
             onPressed: () {
@@ -214,13 +218,16 @@ class _LobbyScreenState extends State<LobbyScreen> {
               _gameService.startGame(widget.gameId);
               Navigator.pop(ctx);
             },
-            child: Text("Yes"),
+            child: const Text("Yes"),
           ),
         ],
       ),
     );
   }
 
+  // ---------------------------------------------------
+  // BUILD
+  // ---------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final isReady = _readyStatus[widget.playerId] ?? false;
@@ -229,12 +236,17 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // Fond
           Container(decoration: AppTheme.backgroundDecoration()),
+
+          // Contenu
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
                 SizedBox(height: screenHeight * 0.05),
+
+                // Code de la partie
                 Text(
                   'Game code:',
                   style: Theme.of(context).textTheme.bodyText1?.copyWith(
@@ -253,7 +265,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
                 // Avatar
                 GestureDetector(
-                  onTap: _takePhoto,
+                  // Si on a déjà un avatar passé par l'utilisateur connecté,
+                  // on désactive la prise de photo. Sinon => _takePhoto
+                  onTap: widget.avatarBase64.isNotEmpty ? null : _takePhoto,
                   child: Container(
                     width: screenHeight * 0.15,
                     height: screenHeight * 0.15,
@@ -268,36 +282,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
                             )
                           : null,
                     ),
-                    child: _playerImage != null
-                      ? ClipOval(
-                          child: Image.file(
-                            _playerImage!,
-                            fit: BoxFit.cover,
-                            width: screenHeight * 0.15,
-                            height: screenHeight * 0.15,
-                          ),
-                        )
-                      : (_avatars[widget.playerId]?.isNotEmpty ?? false)
-                          ? ClipOval(
-                              child: Image.memory(
-                                base64Decode(_avatars[widget.playerId]!),
-                                fit: BoxFit.cover,
-                                width: screenHeight * 0.15,
-                                height: screenHeight * 0.15,
-                              ),
-                            )
-                          : Icon(
-                            Icons.camera_alt_outlined,
-                            size: screenHeight * 0.07,
-                            color: AppTheme.greenButton,
-                          ),
+                    child: _buildAvatarChild(screenHeight),
                   ),
                 ),
                 SizedBox(height: screenHeight * 0.02),
 
-                // Nom
+                // Nom du joueur
                 Container(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: AppTheme.lightMint,
                     borderRadius: BorderRadius.circular(20),
@@ -305,7 +297,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: Text(
                     widget.playerName,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.greenButton,
@@ -315,6 +307,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 ),
                 SizedBox(height: screenHeight * 0.03),
 
+                // Nombre de joueurs prêts
                 Text(
                   'Players ready: $readyCount/${_playerIds.length}',
                   style: Theme.of(context).textTheme.bodyText1?.copyWith(fontSize: 18),
@@ -331,34 +324,35 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     ),
                     padding: const EdgeInsets.all(8.0),
                     child: ListView.builder(
-                    itemCount: _playerIds.length,
-                          itemBuilder: (context, index) {
-                            final pid = _playerIds[index];
-                            final pname = _playerNames[pid] ?? '???';
-                            final pReady = _readyStatus[pid] ?? false;
+                      itemCount: _playerIds.length,
+                      itemBuilder: (context, index) {
+                        final pid = _playerIds[index];
+                        final pname = _playerNames[pid] ?? '???';
+                        final pReady = _readyStatus[pid] ?? false;
 
-                            return Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  pname,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: pReady ? Colors.green : Colors.red,
-                                  ),
-                                ),
-                                Icon(
-                                  pReady ? Icons.check_circle : Icons.cancel,
-                                  color: pReady ? Colors.green : Colors.red,
-                                ),
-                              ],
-                            );
-                          },
-                        ),
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              pname,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: pReady ? Colors.green : Colors.red,
+                              ),
+                            ),
+                            Icon(
+                              pReady ? Icons.check_circle : Icons.cancel,
+                              color: pReady ? Colors.green : Colors.red,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
                 SizedBox(height: screenHeight * 0.03),
 
+                // Bouton Ready / Unready
                 AppTheme.customButton(
                   label: isReady ? "Unready" : "Ready!",
                   onPressed: () => _toggleReadyStatus(!isReady),
@@ -368,6 +362,41 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Petit helper pour afficher la photo / avatar / icône
+  Widget _buildAvatarChild(double screenHeight) {
+    // 1) S’il y a déjà un `_playerImage` => on affiche l’image camera
+    if (_playerImage != null) {
+      return ClipOval(
+        child: Image.file(
+          _playerImage!,
+          fit: BoxFit.cover,
+          width: screenHeight * 0.15,
+          height: screenHeight * 0.15,
+        ),
+      );
+    }
+
+    // 2) Sinon, si on a un avatar dans _avatars pour ce player
+    final currentAvatarB64 = _avatars[widget.playerId] ?? '';
+    if (currentAvatarB64.isNotEmpty) {
+      return ClipOval(
+        child: Image.memory(
+          base64Decode(currentAvatarB64),
+          fit: BoxFit.cover,
+          width: screenHeight * 0.15,
+          height: screenHeight * 0.15,
+        ),
+      );
+    }
+
+    // 3) Sinon on affiche l’icône par défaut (caméra)
+    return Icon(
+      Icons.camera_alt_outlined,
+      size: screenHeight * 0.07,
+      color: AppTheme.greenButton,
     );
   }
 }
