@@ -143,7 +143,7 @@ const handleSocketEvents = (io, socket) => {
   });
 
   socket.on('updateAvatar', async ({ gameId, playerId, avatarBase64 }) => {
-    console.log(`Backend: updateAvatar event for player=${playerName}, len(avatarBase64)=${avatarBase64?.length}`);
+    console.log(`Backend: updateAvatar event for player=${playerId}, len(avatarBase64)=${avatarBase64?.length}`);
     
     try {
       const gameData = await redisClient.hGetAll(`game:${gameId}`);

@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 
+import 'package:floating_bottom_navigation_bar/floating_bottom_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import '../services/game_service.dart';
 import '../styles/app_theme.dart';
@@ -79,6 +80,8 @@ class _GameScreenState extends State<GameScreen> {
     'canMoveLeft': false,
     'canMoveRight': false,
   };
+
+  int _currentNavbarIndex = 0; 
 
   // ------------------------------------------------------
   // INIT
@@ -238,7 +241,7 @@ class _GameScreenState extends State<GameScreen> {
 
     // gameInfos pour rang + avatar
     _gameService.onGameInfos((data) {
-      print("GameScreen: onGameInfos => $data");
+      // print("GameScreen: onGameInfos => $data");
 
       final playersData = data['players'] ?? [];
 
@@ -434,6 +437,8 @@ class _GameScreenState extends State<GameScreen> {
     });
 
     return Scaffold(
+      extendBody: true,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           // 1) background
@@ -480,8 +485,92 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ],
       ),
+
+      // ----------------------------------------------------------
+      // AJOUT DE LA FLOATING NAV BAR
+      // ----------------------------------------------------------
+      bottomNavigationBar: Container(
+        // Ajuste la hauteur de la nav-bar selon tes besoins
+        color: Colors.transparent,
+        margin: const EdgeInsets.only(bottom: 0, left: 0, right: 0),
+        height: 125,  
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: FloatingNavbar(
+          backgroundColor: AppTheme.greenButton.withOpacity(0.9),
+          unselectedItemColor: AppTheme.white.withOpacity(0.7),
+          borderRadius: 20.0, // arrondi plus ou moins
+          currentIndex: _currentNavbarIndex,
+          onTap: (int val) {
+            setState(() {
+              _currentNavbarIndex = val;
+            });
+            switch (val) {
+              case 0:
+                // Rester sur l'écran de jeu
+                break;
+              case 1:
+                // Aller vers Inventory
+                Navigator.pushNamed(context, '/inventory', arguments: {
+                  'gameId': widget.gameId,
+                  'playerId': widget.playerId,
+                });
+                break;
+              case 2:
+                // Aller vers Quests
+                Navigator.pushNamed(context, '/quest', arguments: {
+                  'gameId': widget.gameId,
+                  'playerId': widget.playerId,
+                });
+                break;
+              case 3:
+                // Quitter
+                _showQuitDialog();
+                break;
+            }
+          },
+          items: [
+            FloatingNavbarItem(icon: Icons.videogame_asset, title: 'Game'),
+            FloatingNavbarItem(icon: Icons.inventory_2, title: 'Inventory'),
+            FloatingNavbarItem(icon: Icons.flag, title: 'Quest'),
+            FloatingNavbarItem(icon: Icons.exit_to_app, title: 'Quit'),
+          ],
+        ),
+      ),
+
     );
   }
+
+  // Petite fonction helper pour confirmer le quit
+  void _showQuitDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.lightMint,
+          title: Text('Quit Game', style: AppTheme.themeData.textTheme.bodyLarge),
+          content: Text(
+            'Are you sure you want to quit the current game?',
+            style: AppTheme.themeData.textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop(); // Ferme le dialog
+                Navigator.of(context).pop(); // Quit la page
+                // Optionnel: _gameService.endTurn(widget.gameId) ou autre
+              },
+              child: const Text('Quit'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   // ------------------------------------------------------
   // BUILD "ABOUT YOU" & "ACTIVE PLAYER"
