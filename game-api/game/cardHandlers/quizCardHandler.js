@@ -70,35 +70,36 @@ class QuizCardHandler extends GenericCardHandler {
     try {
       const quizStateJson = await redisClient.hGet(`game:${this.gameId}`, 'quizState');
       const quizState = JSON.parse(quizStateJson || '{}');
-
-      // Si on a fini les questions => endQuiz
+  
       if (quizState.currentQuestion >= quizState.questions.length) {
         console.log('QuizCardHandler: All questions answered. Ending quiz.');
         await this.endQuiz();
         return;
       }
-
-      // On récupère la question en cours
+  
+      // Remettre hasMovedOn = false pour permettre l'incrément à la question suivante
+      quizState.hasMovedOn = false; 
+      await redisClient.hSet(`game:${this.gameId}`, 'quizState', JSON.stringify(quizState));
+  
       const question = quizState.questions[quizState.currentQuestion];
-
-      // On envoie un événement "quizQuestion" 
-      // => front l'affiche (avec timer 8s, etc.)
+  
       this.io.to(this.gameId).emit('quizQuestion', {
         questionIndex: quizState.currentQuestion,
         questionId: question.question_id,
         questionDescription: question.question_description,
         questionImage: question.question_image,
-        questionOptions: JSON.parse(question.question_options), 
+        questionOptions: JSON.parse(question.question_options),
         questionDifficulty: question.question_difficulty,
-        questionImage: question.question_image,       // <--- à ne pas oublier
-        questionCategory: question.question_category, // <--- idem si nécessaire
+        questionCategory: question.question_category,
       });
-
+  
       console.log(`QuizCardHandler: Sending question #${quizState.currentQuestion + 1} in theme "${quizState.chosenTheme}"`);
     } catch (error) {
       console.error('QuizCardHandler: Error sending next question:', error);
     }
   }
+  
+
 
   /**
    * handleAnswer : quand le joueur actif répond
@@ -107,29 +108,26 @@ class QuizCardHandler extends GenericCardHandler {
     try {
       const quizStateJson = await redisClient.hGet(`game:${this.gameId}`, 'quizState');
       const quizState = JSON.parse(quizStateJson || '{}');
-
+  
       const currentQIndex = quizState.currentQuestion;
       const question = quizState.questions[currentQIndex];
       if (!question) {
         console.log('QuizCardHandler: No question found => maybe quiz ended?');
         return;
       }
-
+  
+      // Si la réponse n'est pas "TIMED_OUT" ET qu'elle est correcte => on incrémente correctAnswers
       const isCorrect = (givenAnswer === question.question_answer);
-
-      // Si la réponse est correcte, on incrémente correctAnswers
-      // et on ajoute la récompense associée à CE rang de question
-      // (ex: rewardPattern[0] si c'est la 1ère question).
-      if (isCorrect) {
+      if (givenAnswer !== 'TIMED_OUT' && isCorrect) {
         quizState.correctAnswers += 1;
-        // Au lieu d’utiliser la difficulty, on utilise rewardPattern
+        // On ajoute la récompense associée
         const questionReward = quizState.rewardPattern[currentQIndex] || 0;
         quizState.earnedBerries += questionReward;
       }
-
+  
       // On stocke l'état mis à jour
       await redisClient.hSet(`game:${this.gameId}`, 'quizState', JSON.stringify(quizState));
-
+  
       // On émet "quizAnswerResult"
       this.io.to(this.gameId).emit('quizAnswerResult', {
         questionIndex: currentQIndex,
@@ -137,21 +135,37 @@ class QuizCardHandler extends GenericCardHandler {
         givenAnswer,
         isCorrect,
       });
-
+  
       console.log(`QuizCardHandler: Player ${playerId} => correct? ${isCorrect}`);
-
-      // Passer à la question suivante après 1s
-      quizState.currentQuestion += 1;
-      await redisClient.hSet(`game:${this.gameId}`, 'quizState', JSON.stringify(quizState));
-
-      setTimeout(() => {
-        this.sendNextQuestion();
-      }, 1000);
-
+  
+      // -------------------------------
+      // ÉVITER LE "DOUBLE INCRÉMENT"
+      // -------------------------------
+      // Au lieu d'incrémenter systématiquement currentQuestion,
+      // on peut soit :
+      //  1) Le faire qu'une seule fois
+      //  2) Ajouter un flag "alreadyMovedOn"
+      //  3) Ou conditionner à "givenAnswer !== 'TIMED_OUT'"
+      //
+      // Ex. si on veut passer à la question suivante
+      // même en cas de "TIMED_OUT", on peut le faire
+      // UNE seule fois :
+  
+      if (!quizState.hasMovedOn) {   // Flag pour éviter l'incrément multiple
+        quizState.currentQuestion += 1;
+        quizState.hasMovedOn = true; // On mémorise qu'on a avancé
+        await redisClient.hSet(`game:${this.gameId}`, 'quizState', JSON.stringify(quizState));
+  
+        setTimeout(() => {
+          this.sendNextQuestion();
+        }, 1000);
+      }
+  
     } catch (error) {
       console.error('QuizCardHandler: Error handling quiz answer:', error);
     }
   }
+  
 
   async endQuiz() {
     try {

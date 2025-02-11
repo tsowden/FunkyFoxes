@@ -171,10 +171,11 @@ class AppTheme {
   /// Bouton personnalisé (ex: "Connexion", "Inscription", etc.)
   static Widget customButton({
     required String label,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
     Color? backgroundColor,
   }) {
-    final Color bgColor = backgroundColor ?? greenButton;
+    // Valeur par défaut
+    final Color mainColor = backgroundColor ?? AppTheme.greenButton;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -190,20 +191,39 @@ class AppTheme {
       ),
       child: ElevatedButton(
         onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: bgColor,
-          foregroundColor: white,
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 40),
-          textStyle: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Nunito',
+        style: ButtonStyle(
+          // Couleur de fond par défaut
+          backgroundColor: MaterialStateProperty.resolveWith<Color>(
+            (states) {
+              // État désactivé
+              if (states.contains(MaterialState.disabled)) {
+                // Couleur pour un bouton disabled
+                return mainColor.withOpacity(0.5); 
+              }
+              // État pressé
+              if (states.contains(MaterialState.pressed)) {
+                // Couleur plus sombre ou plus claire selon ton goût
+                return mainColor.withOpacity(0.7);
+              }
+              // État normal
+              return mainColor;
+            },
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-            side: const BorderSide(
-              color: white,
-              width: 2,
+          foregroundColor: MaterialStateProperty.all<Color>(AppTheme.white),
+          textStyle: MaterialStateProperty.all<TextStyle>(
+            const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Nunito',
+            ),
+          ),
+          shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(25),
+              side: const BorderSide(
+                color: AppTheme.white,
+                width: 2,
+              ),
             ),
           ),
         ),

@@ -1,17 +1,52 @@
-// ignore_for_file: avoid_print
+// lib/screens/game_screen.dart
 
-import 'package:floating_bottom_navigation_bar/floating_bottom_navigation_bar.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/game_service.dart';
 import '../styles/app_theme.dart';
-import 'dart:convert';
 
-class GameScreen extends StatefulWidget {
+class GameScreen extends StatelessWidget {
   final String gameId;
   final String playerName;
   final String playerId;
   final GameService gameService;
-  final Map<String, dynamic> initialData;
+
+  // État apporté par GameHomeScreen
+  final String turnState;
+  final bool isPlayerActive;
+
+  final int myBerries;
+  final int myRank;
+  final int totalPlayers;
+  final String? myAvatarBase64;
+  final String? activePlayerAvatar;
+  final String? activePlayerName;
+
+  final String? cardName;
+  final String? cardImage;
+  final String? cardDescription;
+  final String? cardCategory;
+
+  final List<String> betOptions;
+  final String? majorityVote;
+
+  // Quiz
+  final bool isQuizInProgress;
+  final List<String> quizThemes;
+  final int? quizCurrentIndex;
+  final String? quizCurrentDescription;
+  final String? quizCurrentCategory;
+  final String? quizCurrentImage;
+  final List<dynamic> quizCurrentOptions;
+  final bool? quizWasAnswerCorrect;
+  final String? quizCorrectAnswer;
+  final int quizCorrectAnswers;
+  final int quizTotalQuestions;
+  final int quizEarnedBerries;
+
+  // Mouvements possibles
+  final Map<String, bool> validMoves;
 
   const GameScreen({
     Key? key,
@@ -19,571 +54,88 @@ class GameScreen extends StatefulWidget {
     required this.playerName,
     required this.playerId,
     required this.gameService,
-    required this.initialData,
+    required this.turnState,
+    required this.isPlayerActive,
+    required this.myBerries,
+    required this.myRank,
+    required this.totalPlayers,
+    this.myAvatarBase64,
+    this.activePlayerAvatar,
+    this.activePlayerName,
+    this.cardName,
+    this.cardImage,
+    this.cardDescription,
+    this.cardCategory,
+    required this.betOptions,
+    this.majorityVote,
+    required this.isQuizInProgress,
+    required this.quizThemes,
+    this.quizCurrentIndex,
+    this.quizCurrentDescription,
+    this.quizCurrentCategory,
+    this.quizCurrentImage,
+    required this.quizCurrentOptions,
+    this.quizWasAnswerCorrect,
+    this.quizCorrectAnswer,
+    required this.quizCorrectAnswers,
+    required this.quizTotalQuestions,
+    required this.quizEarnedBerries,
+    required this.validMoves,
   }) : super(key: key);
 
   @override
-  _GameScreenState createState() => _GameScreenState();
-}
-
-class _GameScreenState extends State<GameScreen> {
-  // ------------------------------------------------------
-  // FIELDS
-  // ------------------------------------------------------
-  late final GameService _gameService;
-
-  // player info
-  String? activePlayerName;
-  bool isPlayerActive = false;
-  String turnState = 'movement';
-  int _berries = 0;
-  String? _activePlayerAvatar;
-
-  // rank
-  int _myRank = 1;
-  int _totalPlayers = 1;
-
-  // card
-  String? descriptionToDisplay;
-  String? cardImage;
-  String? cardName;
-  String? cardCategory;
-
-  // challenge & bets
-  List<String> betOptions = [];
-  String? majorityVote;
-
-  // quiz
-  List<dynamic> _quizThemes = [];
-  bool _isQuizCard = false;
-  bool _isQuizInProgress = false;
-  int? _currentQuestionIndex;
-  String? _currentQuestionDescription;
-  String? _currentQuestionCategory;
-  String? _currentQuestionImage;
-
-  List<dynamic> _currentQuestionOptions = [];
-  bool? _wasAnswerCorrect;
-  String? _correctAnswer;
-  int _quizCorrectAnswers = 0;
-  int _quizTotalQuestions = 0;
-  int _quizEarnedBerries = 0;
-  String? _lastGivenAnswer;
-
-  Map<String, String> playerMessages = {};
-  List<bool> slotsOccupied = [false, false, false, false];
-  double _messageOpacity = 0.0;
-
-  // valid moves
-  Map<String, bool> validMoves = {
-    'canMoveForward': false,
-    'canMoveLeft': false,
-    'canMoveRight': false,
-  };
-
-  int _currentNavbarIndex = 0; 
-
-  // ------------------------------------------------------
-  // INIT
-  // ------------------------------------------------------
-  @override
-  void initState() {
-    super.initState();
-
-    _gameService = widget.gameService;
-    print("GameScreen: Initialisation pour le jeu ${widget.gameId}");
-
-    // Traite les données initiales reçues depuis le push Navigation:
-    _handleNewTurn(widget.initialData);
-
-    // ---------------------------
-    // LISTENERS
-    // ---------------------------
-    // Turn
-    _gameService.onTurnStarted((data) => _handleNewTurn(data));
-    _gameService.onActivePlayerChanged((data) => _handleNewTurn(data));
-
-    // Card
-    _gameService.onCardDrawn((data) => _handleCardDrawn(data));
-
-    // Tour / betOptions
-    _gameService.onTurnStateChanged((data) {
-      setState(() {
-        turnState = data['turnState'] ?? turnState;
-
-        // Parsing défensif de betOptions :
-        final rawBetOptions = data['betOptions'];
-        if (rawBetOptions is List) {
-          betOptions = rawBetOptions.map((e) => e.toString()).toList();
-        } else {
-          betOptions = [];
-        }
-
-        if (data.containsKey('majorityVote')) {
-          majorityVote = data['majorityVote'];
-          _gameService.majorityVote = data['majorityVote'];
-        }
-      });
-    });
-
-    // Valid moves
-    _gameService.onValidMovesReceived((data) {
-      _updateValidMoves({
-        'canMoveForward': data['canMoveForward'] ?? false,
-        'canMoveLeft': data['canMoveLeft'] ?? false,
-        'canMoveRight': data['canMoveRight'] ?? false,
-      });
-    });
-
-    _gameService.onMoveError((message) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    });
-
-    // Challenge
-    _gameService.onChallengeResult((data) {
-      print("DEBUG - onChallengeResult data: $data");
-      setState(() {
-        turnState = 'result';
-        if (data['majorityVote'] != null) {
-          majorityVote = data['majorityVote'];
-        }
-        if (data['rewards'] != null) {
-          final rewards = data['rewards'] as List<dynamic>;
-          final me = rewards.firstWhere(
-            (r) => r['playerName'] == widget.playerName,
-            orElse: () => null,
-          );
-          if (me != null && me['berries'] != null) {
-            _berries = me['berries'];
-          }
-        }
-      });
-    });
-
-    _gameService.onChallengeVotesUpdated((data) {
-      setState(() {
-        if (data['isMajorityReached'] == true) {
-          turnState = 'result';
-          majorityVote = data['majorityVote'];
-          _gameService.majorityVote = data['majorityVote'];
-        }
-      });
-    });
-
-    _gameService.onBetPlaced((data) {
-      print("DEBUG - onBetPlaced: Bet data received: $data");
-      final playerName = data['playerName'];
-      final bet = data['bet'];
-      final index = betOptions.indexOf(bet);
-      String message;
-      if (index == 0) {
-        message = "$playerName doesn't believe in you at all.";
-      } else if (index == betOptions.length - 1) {
-        message = "$playerName bets everything on you!";
-      } else {
-        message = "$playerName believes in you averagely.";
-      }
-      if (isPlayerActive) {
-        _showTransientMessage(playerName, message);
-      }
-    });
-
-    // Quiz
-    _gameService.onQuizStarted((data) {
-      setState(() {
-        _isQuizInProgress = true;
-        turnState = 'quizInProgress';
-        _currentQuestionIndex = null;
-        _currentQuestionDescription = null;
-        _currentQuestionOptions = [];
-        _wasAnswerCorrect = null;
-        _correctAnswer = null;
-        _lastGivenAnswer = null;
-        _currentQuestionCategory = null;
-        _currentQuestionImage = null;
-      });
-    });
-
-    _gameService.onQuizQuestion((data) {
-      setState(() {
-        _currentQuestionIndex = data['questionIndex'];
-        _currentQuestionDescription = data['questionDescription'];
-        _currentQuestionOptions = data['questionOptions'];
-        _wasAnswerCorrect = null;
-        _correctAnswer = null;
-        _currentQuestionCategory = data['questionCategory'];
-        _currentQuestionImage = data['questionImage'];
-      });
-    });
-
-    _gameService.onQuizAnswerResult((data) {
-      setState(() {
-        _correctAnswer = data['correctAnswer'];
-        _wasAnswerCorrect = data['isCorrect'];
-      });
-    });
-
-    _gameService.onQuizEnd((data) {
-      setState(() {
-        _quizCorrectAnswers = data['correctAnswers'];
-        _quizTotalQuestions = data['totalQuestions'];
-        if (data['playerId'] == widget.playerId) {
-          int newlyEarned = data['earnedBerries'] ?? 0;
-          _berries += newlyEarned;
-          _quizEarnedBerries = newlyEarned;
-        }
-        _isQuizInProgress = false;
-        turnState = 'quizResult';
-      });
-    });
-
-    // gameInfos pour rang + avatar
-    _gameService.onGameInfos((data) {
-      // print("GameScreen: onGameInfos => $data");
-
-      final playersData = data['players'] ?? [];
-
-      // On récupère la liste de joueurs, sous forme d'objets
-      List<Map<String, dynamic>> playersList = [];
-      if (playersData is List) {
-        playersList = playersData.map((p) => p as Map<String, dynamic>).toList();
-      }
-
-      // 1) Récupère l'active player name
-      final activeName = data['activePlayerName'] as String?;
-
-      // 2) Trouver le joueur actif pour son avatar
-      if (activeName != null) {
-        final activePlayerData = playersList.firstWhere(
-          (p) => p['playerName'] == activeName,
-          orElse: () => <String, dynamic>{},
-        );
-        if (activePlayerData.isNotEmpty) {
-          final avatarB64 = activePlayerData['avatarBase64'] as String?;
-          if (avatarB64 != null && avatarB64.isNotEmpty) {
-            setState(() {
-              _activePlayerAvatar = avatarB64;
-            });
-          } else {
-            // Si vide
-            setState(() {
-              _activePlayerAvatar = '';
-            });
-          }
-        }
-        setState(() {
-          activePlayerName = activeName;
-        });
-      }
-
-      // 3) Trouver "me"
-      final me = playersList.firstWhere(
-        (p) => p['playerId'] == widget.playerId,
-        orElse: () => <String, dynamic>{},
-      );
-      if (me.isNotEmpty) {
-        _berries = me['berries'] ?? 0;
-        _myRank = me['rank'] ?? 1;
-      }
-
-      // 4) Nombre total de joueurs
-      setState(() {
-        _totalPlayers = playersList.length;
-      });
-    });
-  }
-
-  // ------------------------------------------------------
-  // METHODS
-  // ------------------------------------------------------
-  void _handleNewTurn(Map<String, dynamic> data) {
-    setState(() {
-      activePlayerName = data['activePlayerName'];
-      isPlayerActive = (activePlayerName == widget.playerName);
-      turnState = data['turnState'] ?? 'movement';
-
-      descriptionToDisplay = null;
-      cardName = null;
-      cardImage = null;
-      betOptions = [];
-      cardCategory = null;
-      majorityVote = null;
-
-      _isQuizCard = false;
-      _quizThemes = [];
-
-      if (isPlayerActive) {
-        _gameService.getValidMoves(widget.gameId, widget.playerId, _updateValidMoves);
-      }
-    });
-  }
-
-  void _handleCardDrawn(Map<String, dynamic> data) {
-    setState(() {
-      activePlayerName = data['activePlayerName'];
-      isPlayerActive = (activePlayerName == widget.playerName);
-      cardName = data['cardName'];
-      cardImage = data['cardImage'];
-      cardCategory = data['cardCategory'];
-      turnState = data['turnState'];
-
-      final rawBetOptions = data['betOptions'];
-      if (rawBetOptions is List) {
-        betOptions = rawBetOptions.map((e) => e.toString()).toList();
-      } else {
-        betOptions = [];
-      }
-
-      if (cardCategory == 'Quiz') {
-        _isQuizCard = true;
-        final themeString = data['cardTheme'] ?? '';
-        print('DEBUG: cardTheme received = $themeString');
-        if (themeString.isNotEmpty) {
-          _quizThemes = themeString.split(';').map((s) => s.trim()).toList();
-        }
-      } else {
-        _isQuizCard = false;
-        _quizThemes = [];
-      }
-
-      String? passiveDescription = data['cardDescriptionPassive'];
-      if (passiveDescription != null &&
-          passiveDescription.contains('{activePlayerName}')) {
-        passiveDescription = passiveDescription.replaceAll(
-          '{activePlayerName}',
-          activePlayerName ?? '',
-        );
-      }
-
-      if (isPlayerActive) {
-        descriptionToDisplay = data['cardDescription'];
-      } else {
-        descriptionToDisplay = passiveDescription;
-      }
-    });
-  }
-
-  void _updateValidMoves(Map<String, bool> moves) {
-    setState(() {
-      validMoves = moves;
-    });
-  }
-
-  void _showTransientMessage(String playerName, String message) {
-    final availableSlot = slotsOccupied.indexWhere((occupied) => !occupied);
-    if (availableSlot != -1) {
-      setState(() {
-        slotsOccupied[availableSlot] = true;
-        playerMessages[playerName] = message;
-        _messageOpacity = 1.0;
-      });
-
-      Future.delayed(const Duration(seconds: 1), () {
-        if (!mounted) return;
-        setState(() => _messageOpacity = 0.0);
-
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) {
-            setState(() {
-              slotsOccupied[availableSlot] = false;
-              playerMessages.remove(playerName);
-            });
-          }
-        });
-      });
-    } else {
-      print("DEBUG: Aucun emplacement libre pour afficher le message.");
-    }
-  }
-
-  String _rankSuffix(int rank) {
-    if (rank == 1) return "1st";
-    if (rank == 2) return "2nd";
-    if (rank == 3) return "3rd";
-    return "${rank}th";
-  }
-
-  // ------------------------------------------------------
-  // BUILD
-  // ------------------------------------------------------
-  @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // prepare messages
-    final messageWidgets = List.generate(slotsOccupied.length, (index) {
-      final playersInSlot = playerMessages.entries.toList();
-      if (index < playersInSlot.length) {
-        final message = playersInSlot[index].value;
-        return AnimatedOpacity(
-          opacity: _messageOpacity,
-          duration: const Duration(seconds: 1),
-          child: Container(
-            margin: EdgeInsets.symmetric(vertical: screenHeight * 0.005),
-            padding: EdgeInsets.all(screenWidth * 0.03),
-            decoration: AppTheme.transientMessageBoxDecoration(screenWidth * 0.02),
-            child: Text(
-              message,
-              style: AppTheme.transientMessageTextStyle(screenWidth * 0.04),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        );
-      }
-      return const SizedBox();
-    });
+    return Stack(
+      children: [
+        // 1) background
+        Container(decoration: AppTheme.backgroundDecoration()),
 
-    return Scaffold(
-      extendBody: true,
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          // 1) background
-          Container(decoration: AppTheme.backgroundDecoration()),
+        // 2) "About you" en haut à gauche
+        Positioned(
+          top: screenHeight * 0.06,
+          left: MediaQuery.of(context).size.width * 0.04,
+          child: _buildYourInfo(context),
+        ),
 
-          // 2) left header
-          Positioned(
-            top: screenHeight * 0.06,
-            left: screenWidth * 0.04,
-            child: _buildYourInfo(context),
-          ),
+        // 3) Info joueur actif en haut à droite
+        Positioned(
+          top: screenHeight * 0.06,
+          right: MediaQuery.of(context).size.width * 0.04,
+          child: _buildActivePlayerInfo(context),
+        ),
 
-          // 3) right header
-          Positioned(
-            top: screenHeight * 0.06,
-            right: screenWidth * 0.04,
-            child: _buildActivePlayerInfo(context),
-          ),
-
-          // 4) main content
-          Padding(
+        // 4) Contenu principal (centré + scrollable)
+        Center(
+          child: Padding(
             padding: EdgeInsets.only(
               top: screenHeight * 0.20,
-              left: screenWidth * 0.03,
-              right: screenWidth * 0.03,
+              left: MediaQuery.of(context).size.width * 0.03,
+              right: MediaQuery.of(context).size.width * 0.03,
               bottom: screenHeight * 0.08,
             ),
             child: SingleChildScrollView(
               child: isPlayerActive
-                  ? buildActivePlayerView()
-                  : buildPassivePlayerView(),
+                  ? _buildActivePlayerView()
+                  : _buildPassivePlayerView(),
             ),
           ),
-
-          // 5) messages in the bottom
-          Positioned(
-            bottom: screenHeight * 0.08,
-            left: 0,
-            right: 0,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: messageWidgets,
-            ),
-          ),
-        ],
-      ),
-
-      // ----------------------------------------------------------
-      // AJOUT DE LA FLOATING NAV BAR
-      // ----------------------------------------------------------
-      bottomNavigationBar: Container(
-        // Ajuste la hauteur de la nav-bar selon tes besoins
-        color: Colors.transparent,
-        margin: const EdgeInsets.only(bottom: 0, left: 0, right: 0),
-        height: 125,  
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: FloatingNavbar(
-          backgroundColor: AppTheme.greenButton.withOpacity(0.9),
-          unselectedItemColor: AppTheme.white.withOpacity(0.7),
-          borderRadius: 20.0, // arrondi plus ou moins
-          currentIndex: _currentNavbarIndex,
-          onTap: (int val) {
-            setState(() {
-              _currentNavbarIndex = val;
-            });
-            switch (val) {
-              case 0:
-                // Rester sur l'écran de jeu
-                break;
-              case 1:
-                // Aller vers Inventory
-                Navigator.pushNamed(context, '/inventory', arguments: {
-                  'gameId': widget.gameId,
-                  'playerId': widget.playerId,
-                });
-                break;
-              case 2:
-                // Aller vers Quests
-                Navigator.pushNamed(context, '/quest', arguments: {
-                  'gameId': widget.gameId,
-                  'playerId': widget.playerId,
-                });
-                break;
-              case 3:
-                // Quitter
-                _showQuitDialog();
-                break;
-            }
-          },
-          items: [
-            FloatingNavbarItem(icon: Icons.videogame_asset, title: 'Game'),
-            FloatingNavbarItem(icon: Icons.inventory_2, title: 'Inventory'),
-            FloatingNavbarItem(icon: Icons.flag, title: 'Quest'),
-            FloatingNavbarItem(icon: Icons.exit_to_app, title: 'Quit'),
-          ],
         ),
-      ),
-
+      ],
     );
   }
 
-  // Petite fonction helper pour confirmer le quit
-  void _showQuitDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppTheme.lightMint,
-          title: Text('Quit Game', style: AppTheme.themeData.textTheme.bodyLarge),
-          content: Text(
-            'Are you sure you want to quit the current game?',
-            style: AppTheme.themeData.textTheme.bodyMedium,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop(); // Ferme le dialog
-                Navigator.of(context).pop(); // Quit la page
-                // Optionnel: _gameService.endTurn(widget.gameId) ou autre
-              },
-              child: const Text('Quit'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-
-  // ------------------------------------------------------
-  // BUILD "ABOUT YOU" & "ACTIVE PLAYER"
-  // ------------------------------------------------------
+  // ----------------------------------------------------------------
+  // 1) Header / About you
+  // ----------------------------------------------------------------
   Widget _buildYourInfo(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
     final circleSize = screenWidth * 0.18;
-    final maxBerries = 30;
-    final rankStr = "${_rankSuffix(_myRank)} out of $_totalPlayers";
+    final maxBerries = 30; // ou la valeur voulue
+    final rankStr = "${_rankSuffix(myRank)} out of $totalPlayers";
 
-    return Container(
+    return SizedBox(
       width: circleSize,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -593,7 +145,7 @@ class _GameScreenState extends State<GameScreen> {
             textAlign: TextAlign.center,
             style: AppTheme.topLabelStyle(context, 0.03),
           ),
-          SizedBox(height: screenHeight * 0.004),
+          const SizedBox(height: 4),
           Container(
             width: circleSize,
             height: circleSize,
@@ -605,7 +157,7 @@ class _GameScreenState extends State<GameScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  "$_berries/$maxBerries",
+                  "$myBerries/$maxBerries",
                   style: AppTheme.circleNumberStyle(circleSize),
                 ),
                 SizedBox(height: circleSize * 0.05),
@@ -617,7 +169,7 @@ class _GameScreenState extends State<GameScreen> {
               ],
             ),
           ),
-          SizedBox(height: screenHeight * 0.005),
+          const SizedBox(height: 6),
           Text(
             rankStr,
             textAlign: TextAlign.center,
@@ -628,21 +180,22 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+  // ----------------------------------------------------------------
+  // 2) Header / Joueur actif
+  // ----------------------------------------------------------------
   Widget _buildActivePlayerInfo(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final circleSize = screenWidth * 0.18;
+    final circleSize = MediaQuery.of(context).size.width * 0.18;
 
+    // Décode l'avatar base64 du joueur actif
     Widget avatarWidget;
-    if (_activePlayerAvatar != null && _activePlayerAvatar!.isNotEmpty) {
-      final bytes = base64Decode(_activePlayerAvatar!);
-      print("DEBUG: Decoding avatar, length = ${_activePlayerAvatar!.length}");
+    if (activePlayerAvatar != null && activePlayerAvatar!.isNotEmpty) {
+      final bytes = base64Decode(activePlayerAvatar!);
       avatarWidget = CircleAvatar(
         radius: circleSize * 0.5,
         backgroundImage: MemoryImage(bytes),
       );
     } else {
-      print("DEBUG: _activePlayerAvatar is null or empty => showing default icon");
+      // Icône par défaut
       avatarWidget = Icon(
         Icons.person,
         size: circleSize * 0.5,
@@ -650,7 +203,7 @@ class _GameScreenState extends State<GameScreen> {
       );
     }
 
-    return Container(
+    return SizedBox(
       width: circleSize,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -660,13 +213,9 @@ class _GameScreenState extends State<GameScreen> {
             textAlign: TextAlign.center,
             style: AppTheme.topLabelStyle(context, 0.03),
           ),
-          SizedBox(height: screenHeight * 0.004),
-          Container(
-            width: circleSize,
-            height: circleSize,
-            child: avatarWidget,
-          ),
-          SizedBox(height: screenHeight * 0.004),
+          const SizedBox(height: 4),
+          SizedBox(width: circleSize, height: circleSize, child: avatarWidget),
+          const SizedBox(height: 4),
           Text(
             "${activePlayerName ?? '???'} is playing",
             textAlign: TextAlign.center,
@@ -677,10 +226,10 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  // ------------------------------------------------------
-  // BUILD: ACTIVE / PASSIVE
-  // ------------------------------------------------------
-  Widget buildActivePlayerView() {
+  // ----------------------------------------------------------------
+  // 3) Corps principal
+  // ----------------------------------------------------------------
+  Widget _buildActivePlayerView() {
     if (cardCategory == 'Quiz') {
       return _buildQuizActiveView();
     } else if (cardCategory == 'Challenge') {
@@ -690,7 +239,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  Widget buildPassivePlayerView() {
+  Widget _buildPassivePlayerView() {
     if (cardCategory == 'Quiz') {
       return _buildQuizPassiveView();
     } else if (cardCategory == 'Challenge') {
@@ -700,291 +249,230 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  // ------------------------------------------------------
-  // CHALLENGE
-  // ------------------------------------------------------
+  // ----------------------------------------------------------------
+  // 4) CHALLENGE
+  // ----------------------------------------------------------------
   Widget _buildChallengeActiveView() {
-    final screenHeight = MediaQuery.of(context).size.height;
     switch (turnState) {
       case 'movement':
-        return Container(
-          width: double.infinity,
-          alignment: Alignment.center,
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "It's your turn ! Please continue in the forest.",
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              buildMovementControls(),
-            ],
-          ),
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "It's your turn ! Please continue in the forest.",
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            _buildMovementControls(),
+          ],
         );
       case 'cardDrawn':
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            buildCardDisplay(),
+            _buildCardDisplay(),
             const SizedBox(height: 16),
             AppTheme.customButton(
               label: 'Start the challenge',
-              onPressed: () => _gameService.startBetting(widget.gameId, widget.playerId),
+              onPressed: () => gameService.startBetting(gameId, playerId),
             ),
           ],
         );
       case 'betting':
-        return Container(
-          margin: EdgeInsets.only(top: screenHeight * 0.25, left: screenHeight * 0.10, right: screenHeight * 0.10),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Other players are making their predictions...',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+        return Text(
+          'Other players are making their predictions...',
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
         );
       case 'challengeInProgress':
-        return Padding(
-          padding: EdgeInsets.only(top: screenHeight * 0.25, left: 12.0, right: 12.0, bottom: 12.0),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "Challenge in progres... It's your turn to show what you're capable of !",
-                  style: AppTheme.themeData.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
+        return Text(
+          "Challenge in progress... Show us what you're capable of!",
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
         );
       case 'result':
-        return Container(
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Challenge results : ${majorityVote ?? "No result"}',
-                  style: AppTheme.themeData.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                AppTheme.customButton(
-                  label: "End the turn",
-                  onPressed: () => _gameService.endTurn(widget.gameId),
-                ),
-              ],
-            ),
-          ),
-        );
-      default:
-        return Container();
-    }
-  }
-
-  Widget _buildChallengePassiveView() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    switch (turnState) {
-      case 'movement':
-        return Container(
-          width: double.infinity,
-          alignment: Alignment.center,
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Text(
-            "$activePlayerName is moving in the forest...",
-            style: AppTheme.themeData.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-        );
-      case 'cardDrawn':
-        return Center(child: buildCardDisplay());
-      case 'betting':
-        return Container(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              buildCardDisplay(),
-              const SizedBox(height: 16),
-              Text(
-                'Make your predictions:',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              ...betOptions.map((option) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: AppTheme.customButton(
-                    label: option,
-                    onPressed: () => _gameService.placeBet(widget.gameId, widget.playerId, option),
-                  ),
-                );
-              }).toList(),
-            ],
-          ),
-        );
-      case 'challengeInProgress':
-        return Padding(
-          padding: EdgeInsets.only(top: screenHeight * 0.25, left: 12.0, right: 12.0, bottom: 12.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Challenge in progress. Once $activePlayerName is done, you need to indicate whether the challenge is successful or not. BE HONEST.',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'How does $activePlayerName succeed ?',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              // Les options de challenge vote :
-              ...betOptions.map((option) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: AppTheme.customButton(
-                    label: option,
-                    onPressed: () => _gameService.placeChallengeVote(widget.gameId, widget.playerId, option),
-                  ),
-                );
-              }).toList(),
-            ],
-          ),
-        );
-      case 'result':
-        return Container(
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Center(
-            child: Text(
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
               'Challenge results : ${majorityVote ?? "No result"}',
               style: AppTheme.themeData.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
-          ),
+            const SizedBox(height: 16),
+            AppTheme.customButton(
+              label: "End the turn",
+              onPressed: () => gameService.endTurn(gameId),
+            ),
+          ],
         );
       default:
-        return Container();
+        return const SizedBox();
     }
   }
 
-
-  // ------------------------------------------------------
-  // QUIZ
-  // ------------------------------------------------------
-  Widget _buildQuizActiveView() {
-    final screenHeight = MediaQuery.of(context).size.height;
+  Widget _buildChallengePassiveView() {
     switch (turnState) {
       case 'movement':
-        return Container(
-          width: double.infinity,
-          alignment: Alignment.center,
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "It's your turn ! Please continue in the forest.",
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              buildMovementControls(),
-            ],
-          ),
+        return Text(
+          "$activePlayerName is moving in the forest...",
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        );
+      case 'cardDrawn':
+        return _buildCardDisplay();
+      case 'betting':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildCardDisplay(),
+            const SizedBox(height: 16),
+            Text(
+              'Make your predictions:',
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ...betOptions.map((option) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: AppTheme.customButton(
+                  label: option,
+                  onPressed: () => gameService.placeBet(gameId, playerId, option),
+                ),
+              );
+            }).toList(),
+          ],
+        );
+      case 'challengeInProgress':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Challenge in progress. Once $activePlayerName is done, we must judge the success.',
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'How well did $activePlayerName succeed ?',
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ...betOptions.map((option) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: AppTheme.customButton(
+                  label: option,
+                  onPressed: () => gameService.placeChallengeVote(gameId, playerId, option),
+                ),
+              );
+            }).toList(),
+          ],
+        );
+      case 'result':
+        return Text(
+          'Challenge results : ${majorityVote ?? "No result"}',
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        );
+      default:
+        return const SizedBox();
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // 5) QUIZ
+  // ----------------------------------------------------------------
+  Widget _buildQuizActiveView() {
+    switch (turnState) {
+      case 'movement':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "It's your turn ! Please continue in the forest.",
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            _buildMovementControls(),
+          ],
         );
       case 'cardDrawn':
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            buildCardDisplay(),
+            _buildCardDisplay(),
             const SizedBox(height: 16),
-            if (!_isQuizInProgress) ...[
-              if (_quizThemes.isNotEmpty) ...[
+            if (!isQuizInProgress) ...[
+              if (quizThemes.isNotEmpty) ...[
                 Text(
                   'Choose your quiz theme:',
                   style: AppTheme.themeData.textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
-                for (var theme in _quizThemes)
+                for (var theme in quizThemes)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4.0),
                     child: AppTheme.customButton(
                       label: theme,
-                      onPressed: () => _gameService.startQuiz(widget.gameId, widget.playerId, theme),
+                      onPressed: () => gameService.startQuiz(gameId, playerId, theme),
                     ),
                   ),
               ],
             ] else
-              buildQuizQuestionView(isActive: true),
+              _buildQuizQuestionView(isActive: true),
           ],
         );
       case 'quizResult':
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Quiz results: $_quizCorrectAnswers / $_quizTotalQuestions',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Berries earned: $_quizEarnedBerries',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              AppTheme.customButton(
-                label: "End the turn",
-                onPressed: () => _gameService.endTurn(widget.gameId),
-              ),
-            ],
-          ),
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Quiz results: $quizCorrectAnswers / $quizTotalQuestions',
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              // Visible seulement pour le joueur actif
+              'Berries earned: $quizEarnedBerries',
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            AppTheme.customButton(
+              label: "End the turn",
+              onPressed: () => gameService.endTurn(gameId),
+            ),
+          ],
         );
       default:
-        if (_isQuizInProgress) {
-          return buildQuizQuestionView(isActive: true);
+        // Si c'est un quiz en cours
+        if (isQuizInProgress) {
+          return _buildQuizQuestionView(isActive: true);
         }
-        return Container();
+        return const SizedBox();
     }
   }
 
   Widget _buildQuizPassiveView() {
-    final screenHeight = MediaQuery.of(context).size.height;
     switch (turnState) {
       case 'movement':
-        return Container(
-          width: double.infinity,
-          alignment: Alignment.center,
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Text(
-            "$activePlayerName is moving in the forest...",
-            style: AppTheme.themeData.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
+        return Text(
+          "$activePlayerName is moving in the forest...",
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
         );
       case 'cardDrawn':
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            buildCardDisplay(),
+            _buildCardDisplay(),
             const SizedBox(height: 16),
             Text(
               "$activePlayerName is choosing a quiz theme...",
@@ -994,265 +482,133 @@ class _GameScreenState extends State<GameScreen> {
           ],
         );
       case 'quizResult':
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Quiz results: $_quizCorrectAnswers / $_quizTotalQuestions',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Berries earned: $_quizEarnedBerries',
-                style: AppTheme.themeData.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+        // Chez les passifs, on affiche juste correctAnswers / total
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Quiz results: $quizCorrectAnswers / $quizTotalQuestions',
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            // On ne montre pas "Berries earned" ici
+          ],
         );
       default:
-        if (_isQuizInProgress) {
-          return buildQuizQuestionView(isActive: false);
-        }
-        return Container();
-    }
-  }
-
-  // ------------------------------------------------------
-  // BUILD: DEFAULT
-  // ------------------------------------------------------
-  Widget _buildDefaultActiveView() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    switch (turnState) {
-      case 'movement':
-        return Container(
-          width: double.infinity,
-          alignment: Alignment.center,
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Column(
+        // Quiz en cours => on montre les questions ET un label "C'est à X de répondre"
+        if (isQuizInProgress) {
+          return Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                "It's your turn. Move!",
+                "It's up to ${activePlayerName ?? '???'} to answer the question!",
                 style: AppTheme.themeData.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              buildMovementControls(),
+              _buildQuizQuestionView(isActive: false),
             ],
-          ),
+          );
+        }
+        return const SizedBox();
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Affichage question/choix
+  // - Timer 10s
+  // - Couleur verte/rouge
+  // - isActive => clique possible ou non
+  // ---------------------------------------------------------------------
+  Widget _buildQuizQuestionView({required bool isActive}) {
+    if (quizCurrentIndex == null) {
+      return Text(
+        "Loading question...",
+        style: AppTheme.themeData.textTheme.bodyMedium,
+        textAlign: TextAlign.center,
+      );
+    }
+    // On force la recréation du widget quand quizCurrentIndex change
+    return _ActiveQuizQuestionWidget(
+      key: ValueKey<int>(quizCurrentIndex!),
+      gameId: gameId,
+      playerId: playerId,
+      gameService: gameService,
+      questionIndex: quizCurrentIndex!,
+      questionDescription: quizCurrentDescription ?? '',
+      questionOptions: quizCurrentOptions,
+      questionImage: quizCurrentImage,
+      questionCategory: quizCurrentCategory,
+      correctAnswer: quizCorrectAnswer,
+      wasAnswerCorrect: quizWasAnswerCorrect,
+      isAnswerable: isActive && quizWasAnswerCorrect == null,
+      onSendAnswer: (String chosenOption) {
+        gameService.quizAnswer(gameId, playerId, chosenOption);
+      },
+    );
+  }
+  // ----------------------------------------------------------------
+  // 6) Logique "Default" (aucune carte spéciale)
+  // ----------------------------------------------------------------
+  Widget _buildDefaultActiveView() {
+    switch (turnState) {
+      case 'movement':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "It's your turn. Move!",
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            _buildMovementControls(),
+          ],
         );
       case 'cardDrawn':
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            buildCardDisplay(),
+            _buildCardDisplay(),
             const SizedBox(height: 16),
             AppTheme.customButton(
               label: 'End the turn',
-              onPressed: () => _gameService.endTurn(widget.gameId),
+              onPressed: () => gameService.endTurn(gameId),
             ),
           ],
         );
       default:
-        return Container();
+        return const SizedBox();
     }
   }
 
   Widget _buildDefaultPassiveView() {
-    final screenHeight = MediaQuery.of(context).size.height;
     switch (turnState) {
       case 'movement':
-        return Container(
-          width: double.infinity,
-          alignment: Alignment.center,
-          margin: EdgeInsets.only(top: screenHeight * 0.25),
-          child: Text(
-            "$activePlayerName is moving in the forest...",
-            style: AppTheme.themeData.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
+        return Text(
+          "$activePlayerName is moving in the forest...",
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
         );
       case 'cardDrawn':
-        return Center(child: buildCardDisplay());
+        return _buildCardDisplay();
       default:
-        return Container();
+        return const SizedBox();
     }
   }
 
-  // ------------------------------------------------------
-  // BUILD: QUIZ QUESTION
-  // ------------------------------------------------------
-
-  
-  Widget buildQuizQuestionView({bool isActive = true}) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    // 1) Si pas encore de questionIndex => "loading"
-    if (_currentQuestionIndex == null) {
-      return Center(
-        child: Text(
-          "Loading question...",
-          style: AppTheme.themeData.textTheme.bodyMedium,
-        ),
-      );
-    }
-
-    // 2) Récupération de la catégorie et de l'image
-    final String? category = _currentQuestionCategory;
-    final String? imageName = _currentQuestionImage;
-
-    // 3) Construire le widget de l'image si on a quelque chose
-    Widget? questionImageWidget;
-    if (imageName != null && imageName.isNotEmpty) {
-
-      final assetPath = 'assets/images/$imageName';
-      print('DEBUG: Image path = $assetPath');
-
-      questionImageWidget = Padding(
-        padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          height: screenHeight * 0.22, // Ajustez la taille (responsif)
-        ),
-      );
-    }
-
-    // 4) Retour : centrer tout, ajouter un peu de marge en haut
-    return Center(
-      child: Container(
-        // Une marge en haut pour descendre un peu si besoin
-        margin: EdgeInsets.only(top: screenHeight * 0.03),
-        child: Column(
-          mainAxisSize: MainAxisSize.min, // pour ne pas prendre tout l'espace vertical
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Numéro de la question
-            Text(
-              "Question ${_currentQuestionIndex! + 1}",
-              style: AppTheme.themeData.textTheme.bodyMedium,
-            ),
-            SizedBox(height: screenHeight * 0.01),
-
-            // En-tête de la question
-            if (_currentQuestionDescription != null)
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
-                child: Text(
-                  _currentQuestionDescription!,
-                  style: AppTheme.themeData.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-
-            // Affichage conditionnel de l'image
-            if (questionImageWidget != null) questionImageWidget,
-
-            SizedBox(height: screenHeight * 0.02),
-
-            // Les options de réponse
-            for (var option in _currentQuestionOptions)
-              _buildAnswerButton(option, isActive),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnswerButton(String option, bool isActive) {
-    Color btnColor = AppTheme.greenButton;
-    if (_lastGivenAnswer != null && _wasAnswerCorrect != null) {
-      if (option == _lastGivenAnswer) {
-        if (_wasAnswerCorrect == true && _correctAnswer == option) {
-          btnColor = Colors.green;
-        } else {
-          btnColor = Colors.red;
-        }
-      }
-    }
-
-    final canClick = isActive && _wasAnswerCorrect == null;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
-      child: AppTheme.customButton(
-        label: option,
-        onPressed: canClick
-            ? () {
-                setState(() => _lastGivenAnswer = option);
-                _gameService.quizAnswer(widget.gameId, widget.playerId, option);
-              }
-            : () {},
-        backgroundColor: btnColor,
-      ),
-    );
-  }
-
-  // ------------------------------------------------------
-  // BUILD: CARD DISPLAY + MOVEMENT
-  // ------------------------------------------------------
-  Widget buildCardDisplay() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    // Centrage horizontal
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (cardName != null)
-            Text(
-              cardName!,
-              style: const TextStyle(
-                fontSize: 24,
-                color: AppTheme.greenButton,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Nunito',
-              ),
-              textAlign: TextAlign.center,
-            ),
-          if (descriptionToDisplay != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: Text(
-                descriptionToDisplay!,
-                style: const TextStyle(
-                  fontSize: 18,
-                  color: AppTheme.greenButton,
-                  fontFamily: 'Nunito',
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          if (cardImage != null)
-            Padding(
-              padding: EdgeInsets.only(bottom: screenHeight * 0.015),
-              child: SizedBox(
-                height: screenHeight * 0.25,
-                child: Image.asset(
-                  'assets/images/$cardImage',
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget buildMovementControls() {
-    if (!isPlayerActive) return Container();
-
+  // ----------------------------------------------------------------
+  // 7) Boutons de déplacement
+  // ----------------------------------------------------------------
+  Widget _buildMovementControls() {
+    if (!isPlayerActive) return const SizedBox();
     return Column(
       children: [
         if (validMoves['canMoveForward'] == true)
           AppTheme.customButton(
             label: 'Move forward',
             onPressed: () =>
-                _gameService.movePlayer(widget.gameId, widget.playerId, 'forward'),
+                gameService.movePlayer(gameId, playerId, 'forward'),
           ),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1263,16 +619,16 @@ class _GameScreenState extends State<GameScreen> {
                 child: AppTheme.customButton(
                   label: 'Left',
                   onPressed: () =>
-                      _gameService.movePlayer(widget.gameId, widget.playerId, 'left'),
+                      gameService.movePlayer(gameId, playerId, 'left'),
                 ),
               ),
             if (validMoves['canMoveRight'] == true)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
                 child: AppTheme.customButton(
                   label: 'Right',
                   onPressed: () =>
-                      _gameService.movePlayer(widget.gameId, widget.playerId, 'right'),
+                      gameService.movePlayer(gameId, playerId, 'right'),
                 ),
               ),
           ],
@@ -1281,35 +637,243 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  // ------------------------------------------------------
-  // FONCTION UTILITAIRE
-  // ------------------------------------------------------
-  bool get hasCardContent {
-    return (cardName != null || cardImage != null || descriptionToDisplay != null);
+  // ----------------------------------------------------------------
+  // 8) Affichage de la carte
+  // ----------------------------------------------------------------
+  Widget _buildCardDisplay() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (cardName != null)
+          Text(
+            cardName!,
+            style: const TextStyle(
+              fontSize: 24,
+              color: AppTheme.greenButton,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Nunito',
+            ),
+            textAlign: TextAlign.center,
+          ),
+        if (cardDescription != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(
+              cardDescription!,
+              style: const TextStyle(
+                fontSize: 18,
+                color: AppTheme.greenButton,
+                fontFamily: 'Nunito',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        if (cardImage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: SizedBox(
+              height: 200, // ajustez selon vos besoins
+              child: Image.asset(
+                'assets/images/$cardImage',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
-  /// cardDispplay or spacing
-  Widget buildCardOrSpacing(Widget body, {double extraSpacing = 0.15}) {
-    final screenHeight = MediaQuery.of(context).size.height;
+  // ----------------------------------------------------------------
+  // 9) Utilitaires
+  // ----------------------------------------------------------------
+  String _rankSuffix(int rank) {
+    if (rank == 1) return "1st";
+    if (rank == 2) return "2nd";
+    if (rank == 3) return "3rd";
+    return "${rank}th";
+  }
+}
 
-    if (hasCardContent) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          buildCardDisplay(),
-          const SizedBox(height: 16),
-          body,
-        ],
-      );
-    } else {
-      // if no card, put un espace
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(height: screenHeight * extraSpacing),
-          body,
-        ],
-      );
+// ---------------------------------------------------------------------
+// WIDGET ÉTATFUL : _ActiveQuizQuestionWidget
+// Gère :
+//  - Timer de 10s (reset à chaque questionIndex),
+//  - Envoi auto d'une mauvaise réponse si time-out,
+//  - Coloration rouge/vert du bouton cliqué.
+// ---------------------------------------------------------------------
+class _ActiveQuizQuestionWidget extends StatefulWidget {
+  final String gameId;
+  final String playerId;
+  final GameService gameService;
+
+  final int questionIndex;
+  final String questionDescription;
+  final List<dynamic> questionOptions;
+  final String? questionImage;
+  final String? questionCategory;
+
+  final String? correctAnswer;
+  final bool? wasAnswerCorrect;
+  final bool isAnswerable;
+
+  final void Function(String chosenOption) onSendAnswer;
+
+  const _ActiveQuizQuestionWidget({
+    Key? key,
+    required this.gameId,
+    required this.playerId,
+    required this.gameService,
+    required this.questionIndex,
+    required this.questionDescription,
+    required this.questionOptions,
+    this.questionImage,
+    this.questionCategory,
+    this.correctAnswer,
+    this.wasAnswerCorrect,
+    required this.isAnswerable,
+    required this.onSendAnswer,
+  }) : super(key: key);
+
+  @override
+  State<_ActiveQuizQuestionWidget> createState() =>
+      _ActiveQuizQuestionWidgetState();
+}
+
+class _ActiveQuizQuestionWidgetState extends State<_ActiveQuizQuestionWidget> {
+  int _timeLeft = 10;
+  Timer? _timer;
+  bool _hasAnswered = false;
+  String? _chosenOption;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  @override
+  void dispose() {
+    _cancelTimer();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _timeLeft = 10;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {
+        _timeLeft--;
+        if (_timeLeft <= 0) {
+          _timer?.cancel();
+          _handleTimeOut();
+        }
+      });
+    });
+  }
+
+  void _cancelTimer() {
+    if (_timer != null) {
+      _timer!.cancel();
+      _timer = null;
     }
+  }
+
+  void _handleTimeOut() {
+    if (!_hasAnswered) {
+      widget.onSendAnswer("TIMED_OUT");
+      setState(() {
+        _hasAnswered = true;
+        _chosenOption = "TIMED_OUT";
+      });
+    }
+  }
+
+  void _handleOptionClick(String option) {
+    if (!widget.isAnswerable || _hasAnswered) return;
+    _cancelTimer();
+    setState(() {
+      _hasAnswered = true;
+      _chosenOption = option;
+    });
+    widget.onSendAnswer(option);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final questionNumber = widget.questionIndex + 1;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          "Question $questionNumber",
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          "$_timeLeft s",
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Colors.red,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+
+        if (widget.questionDescription.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              widget.questionDescription,
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+          ),
+
+        if (widget.questionImage != null && widget.questionImage!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Image.asset(
+              'assets/images/${widget.questionImage}',
+              fit: BoxFit.contain,
+              height: 180,
+            ),
+          ),
+
+        for (var option in widget.questionOptions)
+          _buildAnswerButton(option.toString()),
+      ],
+    );
+  }
+
+  Widget _buildAnswerButton(String option) {
+    // Couleur par défaut
+    Color btnColor = AppTheme.greenButton;
+
+    // Si une réponse a été donnée (manuelle ou timeout) et que la correction est connue
+    if (_hasAnswered && widget.correctAnswer != null) {
+      if (option == _chosenOption) {
+        // Si c'est la bonne réponse
+        if (widget.wasAnswerCorrect == true) {
+          btnColor = AppTheme.correctGreen; // Vert si correct
+        } else {
+          btnColor = AppTheme.incorrectRed; // Rouge si faux
+        }
+      } else if (option == widget.correctAnswer) {
+        btnColor = AppTheme.correctGreen; // Montre la bonne réponse en vert
+      }
+    }
+
+    final canClick = widget.isAnswerable && !_hasAnswered;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4.0),
+      child: AppTheme.customButton(
+        label: option,
+        backgroundColor: btnColor, // Applique la couleur ici
+        onPressed: canClick ? () => _handleOptionClick(option) : null,
+      ),
+    );
   }
 }

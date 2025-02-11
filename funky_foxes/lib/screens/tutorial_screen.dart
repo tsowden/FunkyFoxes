@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:funky_foxes/screens/game_home_screen.dart';
 import '../services/game_service.dart';
 import '../styles/app_theme.dart';
 import 'game_screen.dart';
@@ -52,17 +53,17 @@ class _TutorialScreenState extends State<TutorialScreen> {
   void _onTutorialAllFinished(data) {
     // data contient alors { maze, players, activePlayerName, ... }
     Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => GameScreen(
-          gameId: widget.gameId,
-          playerName: widget.playerName,
-          playerId: widget.playerId,
-          gameService: widget.gameService,
-          initialData: Map<String, dynamic>.from(data), 
+        context,
+        MaterialPageRoute(
+          builder: (_) => GameHomeScreen(
+            gameId: widget.gameId,
+            playerName: widget.playerName,
+            playerId: widget.playerId,
+            gameService: widget.gameService,
+            initialData: Map<String, dynamic>.from(data),
+          ),
         ),
-      ),
-    );
+      );
   }
 
 

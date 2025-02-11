@@ -94,6 +94,11 @@ const handleSocketEvents = (io, socket) => {
     }
   }
 
+  socket.on('requestGameInfos', async ({ gameId }) => {
+    console.log(`Backend: Reçu 'requestGameInfos' pour game=${gameId}`);
+    await broadcastGameInfos(gameId);
+  });
+  
   // -----------------------------------------------------
   // LOBBY LOGIC
   // -----------------------------------------------------

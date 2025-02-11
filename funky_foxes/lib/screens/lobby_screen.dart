@@ -208,6 +208,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           TextButton(
             onPressed: () {
               print('LobbyScreen: L’hôte annule le startGame');
+              _toggleReadyStatus(false);
               Navigator.pop(ctx);
             },
             child: const Text("No"),

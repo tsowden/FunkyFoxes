@@ -122,6 +122,7 @@ class GameService {
       callback(Map<String, dynamic>.from(data));
     });
   }
+  
 
   void getActivePlayer(String gameId) {
     print("GameService: Requesting active player for game $gameId...");

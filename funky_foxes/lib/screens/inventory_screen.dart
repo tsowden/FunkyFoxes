@@ -1,23 +1,43 @@
 // lib/screens/inventory_screen.dart
 import 'package:flutter/material.dart';
+import '../services/game_service.dart';
 import '../styles/app_theme.dart';
 
-class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({Key? key}) : super(key: key);
+class InventoryScreen extends StatefulWidget {
+  final String gameId;
+  final String playerId;
+  final GameService gameService;
+
+  const InventoryScreen({
+    Key? key,
+    required this.gameId,
+    required this.playerId,
+    required this.gameService,
+  }) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {  
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Inventory'),
-        backgroundColor: AppTheme.greenButton,
-        // La flèche de retour est gardée pour la navigation mais rendue invisible
-        iconTheme: const IconThemeData(color: Colors.transparent),
-      ),
-      body: Container(
+  State<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends State<InventoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    print("InventoryScreen: Initialized for game ${widget.gameId}");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      // appBar: AppBar(
+      //   title: const Text('Inventory'),
+      //   backgroundColor: AppTheme.greenButton,
+      //   iconTheme: const IconThemeData(color: Colors.transparent),
+      // ),
+      child: Container(
         decoration: AppTheme.backgroundDecoration(),
         child: ListView.builder(
-          itemCount: 10, // Exemple : 10 éléments dans la collection
+          itemCount: 10,
           itemBuilder: (context, index) {
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -33,13 +53,14 @@ class InventoryScreen extends StatelessWidget {
                 ),
                 trailing: const Icon(Icons.arrow_forward_ios, color: AppTheme.greenButton),
                 onTap: () {
-                  // Action lors du tap sur un item (à personnaliser)
+                  // Action lors du tap sur un item
                 },
               ),
             );
           },
         ),
       ),
+      // Pas de BottomNavigationBar ici (gérée par GameHomeScreen)
     );
   }
 }
