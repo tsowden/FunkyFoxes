@@ -1,5 +1,4 @@
 // lib/screens/inventory_screen.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/game_service.dart';
@@ -9,12 +8,14 @@ class InventoryScreen extends StatefulWidget {
   final String gameId;
   final String playerId;
   final GameService gameService;
+  final List<Map<String, dynamic>> initialInventory; // Nouveau paramètre
 
   const InventoryScreen({
     Key? key,
     required this.gameId,
     required this.playerId,
     required this.gameService,
+    required this.initialInventory,
   }) : super(key: key);
 
   @override
@@ -23,13 +24,20 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen> {
   List<Map<String, dynamic>> _myInventory = [];
+  bool _hasLoaded = false; // Indicateur pour savoir si les données ont été reçues
 
   @override
   void initState() {
     super.initState();
     print("InventoryScreen: Initialized for game ${widget.gameId}");
 
-    // Écoute des infos de la partie pour mettre à jour l'inventaire
+    // Initialisation avec l'inventaire préchargé
+    _myInventory = widget.initialInventory;
+
+    // On considère qu'on a déjà chargé les données initiales
+    // Vous pouvez aussi forcer _hasLoaded à true ici si vous savez que widget.initialInventory est fiable
+    // ou attendre la première mise à jour du socket.
+    // Ici, on choisit d'attendre la mise à jour socket.
     widget.gameService.onGameInfos((data) {
       if (!mounted) return;
       final playersData = data['players'] ?? [];
@@ -42,8 +50,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
           final newInventory = me['inventory'] ?? [];
           setState(() {
             _myInventory = List<Map<String, dynamic>>.from(newInventory);
+            _hasLoaded = true;
+          });
+        } else {
+          setState(() {
+            _hasLoaded = true;
           });
         }
+      } else {
+        setState(() {
+          _hasLoaded = true;
+        });
       }
     });
 
@@ -64,6 +81,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Widget _buildInventoryContent() {
+    if (!_hasLoaded) {
+      // Tant qu'on n'a pas reçu de données, on affiche un indicateur de chargement
+      return Center(child: CircularProgressIndicator());
+    }
     if (_myInventory.isEmpty) {
       return Center(
         child: Text(
@@ -72,7 +93,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ),
       );
     }
-
     return ListView.builder(
       itemCount: _myInventory.length,
       itemBuilder: (context, index) {
@@ -95,10 +115,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           item['name'] ?? 'Unknown item',
           style: AppTheme.themeData.textTheme.bodyMedium,
         ),
-        // subtitle: Text(
-        //   item['description'] ?? '',
-        //   style: AppTheme.themeData.textTheme.bodySmall,
-        // ),
+        subtitle: Text(
+          item['description'] ?? '',
+          style: AppTheme.themeData.textTheme.bodySmall,
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -107,12 +127,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
               icon: const Icon(Icons.build_circle, color: AppTheme.greenButton),
               tooltip: 'Use item',
               onPressed: () {
-                // Montre juste un SnackBar
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text("Using ${item['name']}... (not implemented)"),
+                    content: Text("Using ${item['name']}... "),
                   ),
                 );
+                final itemId = item['itemId'] as int;
+                widget.gameService.useObject(widget.gameId, widget.playerId, itemId);
               },
             ),
             // Bouton "Jeter"
@@ -136,7 +157,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
         fit: BoxFit.contain,
       );
     }
-    // Sinon un simple icône
     return const Icon(Icons.collections, color: AppTheme.greenButton);
   }
 

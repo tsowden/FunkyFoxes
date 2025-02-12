@@ -393,6 +393,23 @@ class GameService {
     });
   }
 
+  void useObject(String gameId, String playerId, int itemId) {
+    print("GameService: Player $playerId uses item $itemId in game $gameId.");
+    socket.emit('useObject', {
+      'gameId': gameId,
+      'playerId': playerId,
+      'itemId': itemId,
+    });
+  }
+
+  void onObjectUsed(Function(Map<String, dynamic>) callback) {
+    socket.on('objectUsed', (data) {
+      print("GameService: Object used => $data");
+      callback(Map<String, dynamic>.from(data));
+    });
+  }
+
+
   // ----------------------------------------------------------------
   // UTILITIES
   // ----------------------------------------------------------------

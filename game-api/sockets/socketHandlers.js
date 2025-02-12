@@ -4,6 +4,7 @@ const TurnManager = require('../game/turnManager');
 const { getCardHandlerForCategory } = require('../game/cardHandlers');
 const redisClient = require('../config/redis');
 const getRandomCard = require('../models/card');
+const { useObjectEffect } = require('../game/objects/objectEffects');
 
 const handleSocketEvents = (io, socket) => {
   console.log('Backend: Socket.IO: Nouveau joueur connecté');
@@ -484,6 +485,39 @@ const handleSocketEvents = (io, socket) => {
     }
   });
 
+  socket.on('useObject', async ({ gameId, playerId, itemId }) => {
+    console.log(`Backend: Player ${playerId} uses item ${itemId} in game ${gameId}`);
+    try {
+      // 1) Charger l'état du jeu
+      const gameData = await redisClient.hGetAll(`game:${gameId}`);
+      const players  = JSON.parse(gameData.players || '[]');
+      const player   = players.find(p => p.playerId === playerId);
+      if (!player) return;
+    
+      // 2) Trouver l'item dans l'inventaire
+      const item = (player.inventory || []).find(i => i.itemId === itemId);
+      if (!item) {
+        console.log("Backend: item not found in player's inventory");
+        return;
+      }
+    
+      // 3) Appeler la logique "useObjectEffect"
+      await useObjectEffect(gameId, playerId, item, players, gameData);
+    
+      // 4) broadcastGameInfos pour mettre à jour le front
+      await broadcastGameInfos(gameId);
+    
+      // 5) Émettre un "objectUsed" (feedback)
+      io.to(gameId).emit('objectUsed', {
+        playerId,
+        itemId,
+        message: `Player used ${item.name}`
+      });
+    } catch (error) {
+      console.error("Error in useObject:", error);
+    }
+  });
+  
   
   // END
   socket.on('disconnect', () => {

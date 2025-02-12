@@ -1,7 +1,8 @@
 // game/turnManager.js
 const redisClient = require('../config/redis');
-const getRandomCard = require('../models/card');
 const { getCardHandlerForCategory } = require('./cardHandlers');
+const { getRandomCard, getCardById } = require('../models/card');
+
 
 class TurnManager {
   constructor(gameId, io) {
@@ -163,12 +164,36 @@ class TurnManager {
    * Pioche une carte aléatoire et invoque le handler approprié
    */
   async drawCard(player) {
-    const card = await getRandomCard();
-    await redisClient.hSet(`game:${this.gameId}`, 'currentCard', JSON.stringify(card));
-
+    // Vérifier si un forced draw est activé pour ce joueur
+    const forcedIds = await redisClient.get(`forcedDraw:${this.gameId}:${player.playerId}`);
+    const forcedCountStr = await redisClient.get(`forcedDrawCount:${this.gameId}:${player.playerId}`);
+    let forcedCount = forcedCountStr ? parseInt(forcedCountStr, 10) : 0;
+    
+    let card;
+    if (forcedIds && forcedCount > 0) {
+      // forcedIds = liste d'IDs séparés par des virgules, ex: "2,3,6"
+      const possibleIds = forcedIds.split(',').map(x => parseInt(x, 10));
+      const randomIndex = Math.floor(Math.random() * possibleIds.length);
+      const forcedCardId = possibleIds[randomIndex];
+      card = await getCardById(forcedCardId);
+      forcedCount -= 1;
+      if (forcedCount <= 0) {
+        await redisClient.del(`forcedDraw:${this.gameId}:${player.playerId}`);
+        await redisClient.del(`forcedDrawCount:${this.gameId}:${player.playerId}`);
+      } else {
+        await redisClient.set(`forcedDrawCount:${this.gameId}:${player.playerId}`, forcedCount.toString());
+      }
+    } else {
+      // Pioche classique
+      card = await getRandomCard();
+    }
+    
+    // Utiliser le handler approprié pour la carte piochée
     const handler = getCardHandlerForCategory(this.gameId, this.io, card.card_category);
     await handler.handleCard(player.playerId, card);
   }
+  
+  
 
   /**
    * Fin d'un tour => on passe le joueur actif au suivant
@@ -181,6 +206,26 @@ class TurnManager {
     }
 
     const players = JSON.parse(gameData.players || '[]');
+
+    const currentActiveId = gameData.activePlayerId;
+
+    // Vérifier le doubleTurnKey
+    const doubleTurnKey = `doubleTurn:${this.gameId}:${currentActiveId}`;
+    const doubleTurn = await redisClient.get(doubleTurnKey);
+    if (doubleTurn === '1') {
+      console.log(`TurnManager: Player ${currentActiveId} gets a second turn!`);
+      // On supprime le flag
+      await redisClient.del(doubleTurnKey);
+      // Ne pas changer de joueur, on renvoie juste "activePlayerChanged" ou turnStarted
+      // Ex:
+      this.io.to(this.gameId).emit('activePlayerChanged', {
+        activePlayerId: currentActiveId,
+        activePlayerName: players.find(p => p.playerId === currentActiveId)?.playerName,
+        turnState: 'movement',
+      });
+      return; 
+    }
+
     let currentIndex = players.findIndex((p) => p.playerId === gameData.activePlayerId);
 
     if (currentIndex === -1) {

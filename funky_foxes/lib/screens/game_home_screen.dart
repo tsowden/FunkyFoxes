@@ -98,6 +98,8 @@ class _GameHomeScreenState extends State<GameHomeScreen> {
   Map<String, String> _playerMessages = {};
   double _messageOpacity = 0.0;
 
+  List<Map<String, dynamic>> _initialInventory = [];
+
   @override
   void initState() {
     super.initState();
@@ -173,9 +175,9 @@ class _GameHomeScreenState extends State<GameHomeScreen> {
         _myBerries = me['berries'] ?? 0;
         _myRank = me['rank'] ?? 1;
         _myAvatarBase64 = me['avatarBase64'] ?? '';
+        _initialInventory = List<Map<String, dynamic>>.from(me['inventory'] ?? []);
       }
     }
-
     // On fait comme si c'était un "nouveau tour" => on reset tout
     _resetForNewTurn(data);
   }
@@ -536,7 +538,6 @@ class _GameHomeScreenState extends State<GameHomeScreen> {
             quizCorrectAnswers: _quizCorrectAnswers,
             quizTotalQuestions: _quizTotalQuestions,
             quizEarnedBerries: _quizEarnedBerries,
-
             validMoves: _validMoves,
           ),
 
@@ -546,6 +547,7 @@ class _GameHomeScreenState extends State<GameHomeScreen> {
               gameId: widget.gameId,
               playerId: widget.playerId,
               gameService: widget.gameService,
+              initialInventory: _initialInventory,
             ),
           if (_currentIndex == 2)
             QuestScreen(
