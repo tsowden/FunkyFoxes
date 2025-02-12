@@ -68,7 +68,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _setupSocketListeners() {
     // Liste complète de joueurs déjà présents
     _gameService.socket.on('currentPlayers', (data) {
-      print('LobbyScreen: currentPlayers => $data');
+      // print('LobbyScreen: currentPlayers => $data');
       setState(() {
         // On réinitialise
         _playerIds.clear();
@@ -95,7 +95,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
     // Nouvel arrivant
     _gameService.socket.on('playerJoined', (data) {
-      print('LobbyScreen: playerJoined => $data');
+      // print('LobbyScreen: playerJoined => $data');
       setState(() {
         final pid = data['playerId'];
         final pname = data['playerName'] ?? '???';
@@ -136,7 +136,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
     // Démarrage de la partie (-> tutorial)
     _gameService.socket.on('startGame', (data) {
-      print('LobbyScreen: startGame => data=$data');
+      // print('LobbyScreen: startGame => data=$data');
       Navigator.push(
         context,
         MaterialPageRoute(

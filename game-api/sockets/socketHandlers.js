@@ -73,8 +73,10 @@ const handleSocketEvents = (io, socket) => {
           berries: p.berries || 0,
           rank: index + 1,
           avatarBase64: p.avatarBase64 || '',
+          inventory: p.inventory || [],
         };
       });
+      
 
       let activePlayerName = null;
       const activePlayer = players.find((p) => p.playerId === activePlayerId);
@@ -82,8 +84,8 @@ const handleSocketEvents = (io, socket) => {
         activePlayerName = activePlayer.playerName;
       }
 
-      console.log("Backend: broadcastGameInfos -> sending playersInfo with avatarBase64 to front...");
-
+      console.log("Backend: broadcastGameInfos");
+      
       io.to(gameId).emit('gameInfos', {
         players: playersInfo,
         activePlayerName: activePlayerName,
@@ -98,7 +100,7 @@ const handleSocketEvents = (io, socket) => {
     console.log(`Backend: Reçu 'requestGameInfos' pour game=${gameId}`);
     await broadcastGameInfos(gameId);
   });
-  
+
   // -----------------------------------------------------
   // LOBBY LOGIC
   // -----------------------------------------------------
@@ -395,6 +397,93 @@ const handleSocketEvents = (io, socket) => {
       console.error('Backend: Error processing quizAnswer:', error);
     }
   });
+
+
+  // -----------------------------------------------------
+  // INVENTORY LOGIC
+  // -----------------------------------------------------
+
+  socket.on('pickUpObject', async ({ gameId, playerId }) => {
+    console.log(`Backend: Player ${playerId} wants to pick up object in game ${gameId}`);
+    try {
+      // 1) Récupérer la currentCard (qui est censée être un "Object")
+      const currentCardJson = await redisClient.hGet(`game:${gameId}`, 'currentCard');
+      if (!currentCardJson) {
+        console.error("No current card in redis for this game");
+        return;
+      }
+      const currentCard = JSON.parse(currentCardJson);
+
+      // 2) Récupérer l'info du joueur
+      const gameData = await redisClient.hGetAll(`game:${gameId}`);
+      const players  = JSON.parse(gameData.players || '[]');
+      const player   = players.find(p => p.playerId === playerId);
+      if (!player) return;
+
+      // 3) Si pas de champ inventory, on l'init
+      if (!player.inventory) {
+        player.inventory = [];
+      }
+      
+      // 4) Ajouter cet objet dans l'inventaire
+      const itemData = {
+        itemId: currentCard.card_id,  // par ex. 101
+        name: currentCard.card_name,
+        image: currentCard.card_image,
+        description: currentCard.card_description,
+      };
+      player.inventory.push(itemData);
+
+      // 5) Sauvegarder en Redis
+      await redisClient.hSet(`game:${gameId}`, 'players', JSON.stringify(players));
+
+      // 6) Émettre un event de succès (optionnel), ou on fait juste un broadcast
+      io.to(gameId).emit('objectPickedUp', {
+        playerId,
+        itemData
+      });
+
+      // 7) On peut mettre le turnState à 'objectCollected' ou carrément laisser le joueur terminer son tour
+      //    (vous décidez)
+      // e.g.:
+      await redisClient.hSet(`game:${gameId}`, 'turnState', 'movement'); 
+      // => ou "endOfTurn", c'est à vous de décider la suite du workflow.
+
+      // 8) broadcast gameInfos => tout le monde voit que l'inventaire du joueur a changé
+      await broadcastGameInfos(gameId);
+
+    } catch (err) {
+      console.error('Error picking up object:', err);
+    }
+  });
+
+  socket.on('discardObject', async ({ gameId, playerId, itemId }) => {
+    console.log(`Backend: Player ${playerId} discards item ${itemId} in game ${gameId}`);
+    try {
+      // 1) Récupérer le joueur
+      const gameData = await redisClient.hGetAll(`game:${gameId}`);
+      const players  = JSON.parse(gameData.players || '[]');
+      const player   = players.find(p => p.playerId === playerId);
+      if (!player) return;
+
+      // 2) Retirer l'item du tableau
+      if (!player.inventory) {
+        player.inventory = [];
+      }
+      player.inventory = player.inventory.filter(i => i.itemId !== itemId);
+
+      // 3) Mettre à jour Redis
+      await redisClient.hSet(`game:${gameId}`, 'players', JSON.stringify(players));
+
+      // 4) Émettre un event (optionnel) + broadcast
+      io.to(gameId).emit('objectDiscarded', { playerId, itemId });
+      await broadcastGameInfos(gameId);
+
+    } catch (err) {
+      console.error('Error discarding object:', err);
+    }
+  });
+
   
   // END
   socket.on('disconnect', () => {

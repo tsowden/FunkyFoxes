@@ -27,7 +27,7 @@ class GenericCardHandler {
 
       // 3) Préparer la description “passive”
       const cardDescriptionPassive = card.card_description_passif
-        ? card.card_description_passif.replace('{activePlayerName}', activePlayer.playerName)
+        ? card.card_description_passif.replaceAll('{activePlayerName}', activePlayer.playerName)
         : 'Aucune description passive.';
 
       // 4) Gérer les options de pari (si pertinent)

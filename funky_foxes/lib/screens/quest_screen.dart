@@ -29,6 +29,7 @@ class _QuestScreenState extends State<QuestScreen> {
     super.initState();
     // Écoute des infos de la partie pour mettre à jour le nombre de baies
     widget.gameService.onGameInfos((data) {
+      if (!mounted) return;
       final playersData = data['players'] ?? [];
       if (playersData is List) {
         final me = playersData.firstWhere(

@@ -234,6 +234,8 @@ class GameScreen extends StatelessWidget {
       return _buildQuizActiveView();
     } else if (cardCategory == 'Challenge') {
       return _buildChallengeActiveView();
+    } else if (cardCategory == 'Object') {
+      return _buildObjectActiveView();
     } else {
       return _buildDefaultActiveView();
     }
@@ -244,6 +246,8 @@ class GameScreen extends StatelessWidget {
       return _buildQuizPassiveView();
     } else if (cardCategory == 'Challenge') {
       return _buildChallengePassiveView();
+    } else if (cardCategory == 'Object') {
+      return _buildObjectPassiveView();
     } else {
       return _buildDefaultPassiveView();
     }
@@ -495,7 +499,7 @@ class GameScreen extends StatelessWidget {
           ],
         );
       default:
-        // Quiz en cours => on montre les questions ET un label "C'est à X de répondre"
+        // Quiz en cours => on montre la question ET un label "It's up to X..."
         if (isQuizInProgress) {
           return Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -514,11 +518,66 @@ class GameScreen extends StatelessWidget {
     }
   }
 
+  // ----------------------------------------------------------------
+  // 6) OBJET
+  // ----------------------------------------------------------------
+  Widget _buildObjectActiveView() {
+    switch (turnState) {
+      case 'movement':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "It's your turn ! Please continue in the forest.",
+              style: AppTheme.themeData.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            _buildMovementControls(),
+          ],
+        );
+      case 'cardDrawn':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildCardDisplay(),
+            const SizedBox(height: 16),
+            AppTheme.customButton(
+              label: 'Ramasser',
+              onPressed: () {
+                // 1) Ramasser l’objet => pickUpObject
+                gameService.pickUpObject(gameId, playerId);
+
+                // 2) Mettre fin au tour immédiatement
+                gameService.endTurn(gameId);
+              },
+            ),
+          ],
+        );
+      default:
+        return const SizedBox();
+    }
+  }
+
+  Widget _buildObjectPassiveView() {
+    switch (turnState) {
+      case 'movement':
+        return Text(
+          "$activePlayerName is moving in the forest...",
+          style: AppTheme.themeData.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        );
+      case 'cardDrawn':
+        // Le joueur actif voit le bouton "Ramasser",
+        // les passifs voient juste la carte
+        return _buildCardDisplay();
+      default:
+        return const SizedBox();
+    }
+  }
+
   // ---------------------------------------------------------------------
-  // Affichage question/choix
-  // - Timer 10s
-  // - Couleur verte/rouge
-  // - isActive => clique possible ou non
+  // Affichage question/choix (QUIZ)
   // ---------------------------------------------------------------------
   Widget _buildQuizQuestionView({required bool isActive}) {
     if (quizCurrentIndex == null) {
@@ -547,8 +606,9 @@ class GameScreen extends StatelessWidget {
       },
     );
   }
+
   // ----------------------------------------------------------------
-  // 6) Logique "Default" (aucune carte spéciale)
+  // 7) Logique "Default" (aucune carte spéciale)
   // ----------------------------------------------------------------
   Widget _buildDefaultActiveView() {
     switch (turnState) {
@@ -598,7 +658,7 @@ class GameScreen extends StatelessWidget {
   }
 
   // ----------------------------------------------------------------
-  // 7) Boutons de déplacement
+  // 8) Boutons de déplacement
   // ----------------------------------------------------------------
   Widget _buildMovementControls() {
     if (!isPlayerActive) return const SizedBox();
@@ -638,7 +698,7 @@ class GameScreen extends StatelessWidget {
   }
 
   // ----------------------------------------------------------------
-  // 8) Affichage de la carte
+  // 9) Affichage de la carte
   // ----------------------------------------------------------------
   Widget _buildCardDisplay() {
     return Column(
@@ -684,7 +744,7 @@ class GameScreen extends StatelessWidget {
   }
 
   // ----------------------------------------------------------------
-  // 9) Utilitaires
+  // 10) Utilitaires
   // ----------------------------------------------------------------
   String _rankSuffix(int rank) {
     if (rank == 1) return "1st";
@@ -772,10 +832,8 @@ class _ActiveQuizQuestionWidgetState extends State<_ActiveQuizQuestionWidget> {
   }
 
   void _cancelTimer() {
-    if (_timer != null) {
-      _timer!.cancel();
-      _timer = null;
-    }
+    _timer?.cancel();
+    _timer = null;
   }
 
   void _handleTimeOut() {
@@ -852,7 +910,7 @@ class _ActiveQuizQuestionWidgetState extends State<_ActiveQuizQuestionWidget> {
     // Couleur par défaut
     Color btnColor = AppTheme.greenButton;
 
-    // Si une réponse a été donnée (manuelle ou timeout) et que la correction est connue
+    // Si une réponse a été donnée (manuelle ou timeout) et qu'on sait si c'est correct
     if (_hasAnswered && widget.correctAnswer != null) {
       if (option == _chosenOption) {
         // Si c'est la bonne réponse
@@ -862,7 +920,8 @@ class _ActiveQuizQuestionWidgetState extends State<_ActiveQuizQuestionWidget> {
           btnColor = AppTheme.incorrectRed; // Rouge si faux
         }
       } else if (option == widget.correctAnswer) {
-        btnColor = AppTheme.correctGreen; // Montre la bonne réponse en vert
+        // Affiche la bonne réponse en vert si différent du chosenOption
+        btnColor = AppTheme.correctGreen;
       }
     }
 
@@ -871,7 +930,7 @@ class _ActiveQuizQuestionWidgetState extends State<_ActiveQuizQuestionWidget> {
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       child: AppTheme.customButton(
         label: option,
-        backgroundColor: btnColor, // Applique la couleur ici
+        backgroundColor: btnColor,
         onPressed: canClick ? () => _handleOptionClick(option) : null,
       ),
     );
