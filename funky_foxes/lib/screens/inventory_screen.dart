@@ -8,7 +8,7 @@ class InventoryScreen extends StatefulWidget {
   final String gameId;
   final String playerId;
   final GameService gameService;
-  final List<Map<String, dynamic>> initialInventory; // Nouveau paramètre
+  final List<Map<String, dynamic>> initialInventory; // Inventaire préchargé
 
   const InventoryScreen({
     Key? key,
@@ -24,7 +24,7 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen> {
   List<Map<String, dynamic>> _myInventory = [];
-  bool _hasLoaded = false; // Indicateur pour savoir si les données ont été reçues
+  bool _hasLoaded = false;
 
   @override
   void initState() {
@@ -34,10 +34,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     // Initialisation avec l'inventaire préchargé
     _myInventory = widget.initialInventory;
 
-    // On considère qu'on a déjà chargé les données initiales
-    // Vous pouvez aussi forcer _hasLoaded à true ici si vous savez que widget.initialInventory est fiable
-    // ou attendre la première mise à jour du socket.
-    // Ici, on choisit d'attendre la mise à jour socket.
     widget.gameService.onGameInfos((data) {
       if (!mounted) return;
       final playersData = data['players'] ?? [];
@@ -64,7 +60,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       }
     });
 
-    // Demande explicite d'actualisation dès l'ouverture
+    // Demande d'actualisation dès l'ouverture
     widget.gameService.socket.emit('requestGameInfos', {
       'gameId': widget.gameId,
     });
@@ -75,14 +71,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return SafeArea(
       child: Container(
         decoration: AppTheme.backgroundDecoration(),
-        child: _buildInventoryContent(),
+        child: Column(
+          children: [
+            // Titre de la page
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Text(
+                "Inventory",
+                style: AppTheme.themeData.textTheme.displayLarge?.copyWith(
+                  fontSize: 36,
+                  color: AppTheme.greenButton,
+                ),
+              ),
+            ),
+            Expanded(child: _buildInventoryContent()),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildInventoryContent() {
     if (!_hasLoaded) {
-      // Tant qu'on n'a pas reçu de données, on affiche un indicateur de chargement
       return Center(child: CircularProgressIndicator());
     }
     if (_myInventory.isEmpty) {
@@ -104,60 +114,107 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Widget _buildInventoryItem(Map<String, dynamic> item) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      // Couleur de fond personnalisée pour la tuile
+      color: Color.fromRGBO(220, 232, 233, 1).withOpacity(0.8),
       elevation: 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: ListTile(
-        leading: _buildItemLeading(item),
-        title: Text(
-          item['name'] ?? 'Unknown item',
-          style: AppTheme.themeData.textTheme.bodyMedium,
-        ),
-        subtitle: Text(
-          item['description'] ?? '',
-          style: AppTheme.themeData.textTheme.bodySmall,
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Bouton "Utiliser"
-            IconButton(
-              icon: const Icon(Icons.build_circle, color: AppTheme.greenButton),
-              tooltip: 'Use item',
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text("Using ${item['name']}... "),
+            Row(
+              children: [
+                _buildItemLeading(item),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item['name'] ?? 'Unknown item',
+                    style: AppTheme.themeData.textTheme.bodyMedium,
                   ),
-                );
-                final itemId = item['itemId'] as int;
-                widget.gameService.useObject(widget.gameId, widget.playerId, itemId);
-              },
+                ),
+              ],
             ),
-            // Bouton "Jeter"
-            IconButton(
-              icon: const Icon(Icons.delete_forever, color: AppTheme.redButton),
-              tooltip: 'Discard item',
-              onPressed: () => _confirmDiscard(item),
+            const SizedBox(height: 8),
+            // Affichage de la description en italique (texte fixe pour les objets spéciaux)
+            Text(
+              _getCustomDescription(item),
+              style: AppTheme.themeData.textTheme.bodySmall?.copyWith(
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.normal,
+              ),
             ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Bouton "Utiliser" sans encadrement
+                TextButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Using ${item['name']}... "),
+                      ),
+                    );
+                    final itemId = item['itemId'] as int;
+                    widget.gameService.useObject(widget.gameId, widget.playerId, itemId);
+                  },
+                  child: Text(
+                    "Use",
+                    style: TextStyle(fontSize: 16, color: Color.fromARGB(196, 64, 147, 63)),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Bouton "Jeter" sans encadrement
+                TextButton(
+                  onPressed: () => _confirmDiscard(item),
+                  child: Text(
+                    "Discard",
+                    style: TextStyle(fontSize: 16, color: Color.fromARGB(255, 212, 18, 18)),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              ],
+            )
           ],
         ),
       ),
     );
   }
 
+  /// Retourne une description personnalisée pour les objets spéciaux
+  String _getCustomDescription(Map<String, dynamic> item) {
+    final int itemId = item['itemId'];
+    switch (itemId) {
+      case 10:
+        return "Consommez pour jouer un tour supplémentaire.";
+      case 11:
+        return "Utilisez pour tenter de voler une baie (75% de réussite, risque de perdre 3 baies).";
+      case 12:
+        return "Force les 2 prochains tirages à être des cartes liées à des thèmes historiques.";
+      default:
+        return "";
+    }
+  }
+
   Widget _buildItemLeading(Map<String, dynamic> item) {
     if (item['image'] != null && (item['image'] as String).isNotEmpty) {
       return Image.asset(
         'assets/images/${item['image']}',
-        width: 50,
-        height: 50,
+        width: 80, // Image légèrement agrandie
+        height: 80,
         fit: BoxFit.contain,
       );
     }
-    return const Icon(Icons.collections, color: AppTheme.greenButton);
+    return const Icon(Icons.collections, color:Color.fromARGB(196, 64, 147, 63));
   }
 
   void _confirmDiscard(Map<String, dynamic> item) {
@@ -179,18 +236,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           actions: [
             TextButton(
-              child: const Text('Cancel'),
+              child: const Text('Cancel', style: TextStyle(color: Color.fromARGB(196, 64, 147, 63))),
               onPressed: () => Navigator.of(context).pop(),
             ),
             TextButton(
-              child: const Text('Discard'),
+              child: const Text('Discard', style: TextStyle(color:  Color.fromARGB(196, 64, 147, 63))),
               onPressed: () {
                 Navigator.of(context).pop();
-                widget.gameService.discardObject(
-                  widget.gameId,
-                  widget.playerId,
-                  itemId,
-                );
+                widget.gameService.discardObject(widget.gameId, widget.playerId, itemId);
               },
             ),
           ],
